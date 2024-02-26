@@ -12,6 +12,9 @@
 #include "stepper_motor_encoder.h"
 #include <string.h>
 
+#include "wifi.h"
+#include "http.h"
+
 
 #define STEP_MOTOR_GPIO_STEP     GPIO_NUM_37
 
@@ -47,7 +50,7 @@
 const static uint32_t uniform_speed_hz = 10000;
 
 typedef enum {
-    N = 0, S = 1, W = 2, E = 3, NE = 4, NW = 5, SW = 6, SE = 7
+    W = 0, E = 1, N = 2, S = 3, NE = 4, NW = 5, SW = 6, SE = 7
 } Direction;
 
 static const int dirConfigs[8][4] = {{1, 1, 1, 1}, // N
@@ -170,6 +173,7 @@ void setupRMT() {
 }
 
 int executeCommand(char *command) {
+
     char *action = NULL;
     char *direction = NULL;
     int distance = 0;
@@ -213,6 +217,11 @@ int executeCommand(char *command) {
 }
 
 void app_main(void) {
+
+    initNvs();
+    setupWifi();
+    startWebserver();
+
     ESP_LOGI(TAG_RMT, "Initialize EN + DIR GPIO");
     gpio_config_t en_dir_gpio_config = {
             .mode = GPIO_MODE_OUTPUT,
@@ -229,13 +238,13 @@ void app_main(void) {
 
     setupRMT();
 
-    executeCommand("MOVE NE 2\n");
-    executeCommand("MOVE SE 2\n");
-    executeCommand("MOVE SW 2\n");
-    executeCommand("MOVE NW 2\n");
+//    executeCommand("MOVE NE 2\n");
+//    executeCommand("MOVE SE 2\n");
+//    executeCommand("MOVE SW 2\n");
+//    executeCommand("MOVE NW 2\n");
 
-//    move(SE, 4);
-//    move(SW, 4);
-//    move(NW, 4);
-
+    move(SE, 2);
+    move(SW, 2);
+    move(NW, 2);
+    move(NE, 2);
 }
