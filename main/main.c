@@ -10,6 +10,8 @@
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include "stepper_motor_encoder.h"
+#include <string.h>
+
 
 #define STEP_MOTOR_GPIO_STEP     GPIO_NUM_37
 
@@ -60,6 +62,26 @@ static const int dirConfigs[8][4] = {{1, 1, 1, 1}, // N
 rmt_channel_handle_t motor_chan = NULL;
 rmt_encoder_handle_t uniform_motor_encoder = NULL;
 
+Direction stringToEnum(const char *dirAsString) {
+    if (strcmp(dirAsString, "N") == 0) {
+        return N;
+    } else if (strcmp(dirAsString, "S") == 0) {
+        return S;
+    } else if (strcmp(dirAsString, "W") == 0) {
+        return W;
+    } else if (strcmp(dirAsString, "E") == 0) {
+        return E;
+    } else if (strcmp(dirAsString, "NE") == 0) {
+        return NE;
+    } else if (strcmp(dirAsString, "NW") == 0) {
+        return NW;
+    } else if (strcmp(dirAsString, "SW") == 0) {
+        return SW;
+    } else {
+        return SE;
+    }
+}
+
 void disableMotor1() {
     gpio_set_level(STEP_MOTOR_RST1, 0);
     gpio_set_level(STEP_MOTOR_SLP1, 0);
@@ -87,7 +109,7 @@ void toggleMotor(bool switchOn, int motor) {
         } else {
             disableMotor1();
         }
-    } else if(motor == 2){
+    } else if (motor == 2) {
         if (switchOn) {
             enableMotor2();
         } else {
@@ -96,19 +118,20 @@ void toggleMotor(bool switchOn, int motor) {
     }
 }
 
-int move(Direction dir, int numHalfTiles ){
+int move(Direction dir, int numHalfTiles) {
     int tileDistance;
-    if(dir > 3){
-        tileDistance = (DIAGONAL_TILE_IN_STEPS/2)*numHalfTiles;
+    if (dir > 3) {
+        tileDistance = (DIAGONAL_TILE_IN_STEPS / 2) * numHalfTiles;
     } else {
-        tileDistance = (ORTHOGONAL_TILE_IN_STEPS/2)*numHalfTiles;
+        tileDistance = (ORTHOGONAL_TILE_IN_STEPS / 2) * numHalfTiles;
     }
 
     gpio_set_level(STEP_MOTOR_DIR1, dirConfigs[dir][0]);
     gpio_set_level(STEP_MOTOR_DIR2, dirConfigs[dir][1]);
     toggleMotor(dirConfigs[dir][2], 1);
     toggleMotor(dirConfigs[dir][3], 2);
-    printf("dirConfigs %i : DIR1 = %i, DIR2 = %i, M1  = %i, M2  = %i \n", dir, dirConfigs[dir][0], dirConfigs[dir][1], dirConfigs[dir][2], dirConfigs[dir][3]);
+    printf("dirConfigs %i : DIR1 = %i, DIR2 = %i, M1  = %i, M2  = %i \n", dir, dirConfigs[dir][0],
+           dirConfigs[dir][1], dirConfigs[dir][2], dirConfigs[dir][3]);
 
     ESP_LOGI(TAG_RMT, "Spin motor for 6000 steps: 500 accel + 5000 uniform + 500 decel");
     rmt_transmit_config_t tx_config = {
@@ -125,7 +148,7 @@ int move(Direction dir, int numHalfTiles ){
     return tileDistance;
 }
 
-void setupRMT(){
+void setupRMT() {
     ESP_LOGI(TAG_RMT, "Create RMT TX channel");
     rmt_tx_channel_config_t tx_chan_config = {
             .clk_src = RMT_CLK_SRC_DEFAULT, // select clock source
@@ -146,6 +169,49 @@ void setupRMT(){
     ESP_ERROR_CHECK(rmt_enable(motor_chan));
 }
 
+int executeCommand(char *command) {
+    char *action = NULL;
+    char *direction = NULL;
+    int distance = 0;
+
+    char *test = "MOVE SE 3\n";
+
+    /* get the first token */
+    char *m = strtok(command, " ");
+
+    /* walk through other tokens */
+    int count = 0;
+    while (m != NULL) {
+
+        switch (count) {
+            case 0:
+                action = m;
+            case 1:
+                direction = m;
+            case 2:
+                distance = atoi(m);
+            default:
+                break;
+        }
+        m = strtok(NULL, " ");
+        count++;
+    }
+    printf(" full command = %s\n", command);
+    printf("action = %s\n", action);
+    printf("direction = %s\n", direction);
+    printf(" distance = %d\n", distance);
+
+    if (strlen(command) < 3) {
+        printf("UNKNOWN COMMAND\n");
+        return 1;
+    }
+    if (strcmp(action, "MOVE") == 0) {
+        printf("MOVE DETECTED\n");
+        move(stringToEnum(direction), distance);
+    }
+    return 1;
+}
+
 void app_main(void) {
     ESP_LOGI(TAG_RMT, "Initialize EN + DIR GPIO");
     gpio_config_t en_dir_gpio_config = {
@@ -163,9 +229,13 @@ void app_main(void) {
 
     setupRMT();
 
-    move(NE, 4);
-    move(SE, 4);
-    move(SW, 4);
-    move(NW, 4);
+    executeCommand("MOVE NE 2\n");
+    executeCommand("MOVE SE 2\n");
+    executeCommand("MOVE SW 2\n");
+    executeCommand("MOVE NW 2\n");
+
+//    move(SE, 4);
+//    move(SW, 4);
+//    move(NW, 4);
 
 }
