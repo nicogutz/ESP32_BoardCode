@@ -243,8 +243,8 @@ void app_main(void) {
 //    executeCommand("MOVE SW 2\n");
 //    executeCommand("MOVE NW 2\n");
 
-    move(SE, 2);
-    move(SW, 2);
-    move(NW, 2);
-    move(NE, 2);
+//    move(SE, 2);
+//    move(SW, 2);
+//    move(NW, 2);
+//    move(NE, 2);
 }
