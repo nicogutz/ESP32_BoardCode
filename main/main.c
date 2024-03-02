@@ -14,6 +14,7 @@
 
 #include "wifi.h"
 #include "http.h"
+#include "bt_server.h"
 
 
 #define STEP_MOTOR_GPIO_STEP     GPIO_NUM_37
@@ -218,31 +219,32 @@ int executeCommand(char *command) {
 
 void app_main(void) {
 
-    initNvs();
-    setupWifi();
-    startWebserver();
+//    initNvs();
+//    setupWifi();
+//    startWebserver();
+    startBT();
 
-    ESP_LOGI(TAG_RMT, "Initialize EN + DIR GPIO");
-    gpio_config_t en_dir_gpio_config = {
-            .mode = GPIO_MODE_OUTPUT,
-            .intr_type = GPIO_INTR_DISABLE,
-            .pin_bit_mask = GPIO_OUTPUT_PIN_SEL
-    };
+//    ESP_LOGI(TAG_RMT, "Initialize EN + DIR GPIO");
+//    gpio_config_t en_dir_gpio_config = {
+//            .mode = GPIO_MODE_OUTPUT,
+//            .intr_type = GPIO_INTR_DISABLE,
+//            .pin_bit_mask = GPIO_OUTPUT_PIN_SEL
+//    };
 
 //    en_dir_gpio_config.pin_bit_mask = GPIO_INPUT_PIN_SEL;
 //    en_dir_gpio_config.mode = GPIO_MODE_INPUT;
 //    en_dir_gpio_config.pull_up_en = 1;
 //    gpio_config(&en_dir_gpio_config);
 
-    ESP_ERROR_CHECK(gpio_config(&en_dir_gpio_config));
-
-    setupRMT();
-
+//    ESP_ERROR_CHECK(gpio_config(&en_dir_gpio_config));
+//
+//    setupRMT();
+//
 //    executeCommand("MOVE NE 2\n");
 //    executeCommand("MOVE SE 2\n");
 //    executeCommand("MOVE SW 2\n");
 //    executeCommand("MOVE NW 2\n");
-
+//
 //    move(SE, 2);
 //    move(SW, 2);
 //    move(NW, 2);
