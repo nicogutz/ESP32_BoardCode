@@ -14,7 +14,7 @@ esp_err_t getStatusHandler(httpd_req_t *req)
     return ESP_OK;
 }
 
-int executeCommand(char *command);
+int executeScript(char *command);
 
 esp_err_t postExecuteHandler(httpd_req_t *req)
 {
@@ -42,7 +42,7 @@ esp_err_t postExecuteHandler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    int result = executeCommand(content);
+    int result = executeScript(content);
 
     printf("%d", result);
 

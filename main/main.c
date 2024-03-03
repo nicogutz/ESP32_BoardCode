@@ -50,6 +50,10 @@
 
 const static uint32_t uniform_speed_hz = 10000;
 
+#define MAX_COMMANDS 10
+#define MAX_PARAMS 10
+#define MAX_PARAM_LENGTH 10
+
 typedef enum {
     W = 0, E = 1, N = 2, S = 3, NE = 4, NW = 5, SW = 6, SE = 7
 } Direction;
@@ -173,48 +177,93 @@ void setupRMT() {
     ESP_ERROR_CHECK(rmt_enable(motor_chan));
 }
 
-int executeCommand(char *command) {
+void parseCommands(const char command[], char Params[MAX_PARAMS][MAX_PARAM_LENGTH], int *numParams) {
+    *numParams = 0;
+    const char delimiter[] = " ";
+    char *rest, *token;
 
-    char *action = NULL;
-    char *direction = NULL;
-    int distance = 0;
+    rest = strdup(command);
 
-    char *test = "MOVE SE 3\n";
+    if (rest == NULL) {
+        perror("Memory allocation error");
+        exit(EXIT_FAILURE);
+    }
 
-    /* get the first token */
-    char *m = strtok(command, " ");
+    char *rest_copy = rest;  // Store a copy of the pointer to free later
 
-    /* walk through other tokens */
-    int count = 0;
-    while (m != NULL) {
+    // Parse the command into Params array
+    while ((token = strtok_r(rest, delimiter, &rest)) != NULL && *numParams < MAX_PARAMS) {
+        strcpy(Params[*numParams], token);
+        (*numParams)++;
+    }
 
-        switch (count) {
-            case 0:
-                action = m;
-            case 1:
-                direction = m;
-            case 2:
-                distance = atoi(m);
-            default:
-                break;
+    free(rest_copy);  // Free the original memory allocation
+}
+
+void parseScript(const char script[], char commands[MAX_COMMANDS][MAX_PARAMS][MAX_PARAM_LENGTH], int *numCommands,
+                 int *numParams) {
+    *numCommands = 0;
+    const char commandDelimiter[] = "\n";
+
+    char *rest, *command;
+
+    rest = strdup(script);
+
+    if (rest == NULL) {
+        perror("Memory allocation error");
+        exit(EXIT_FAILURE);
+    }
+
+    char *rest_copy = rest;  // Store a copy of the pointer to free later
+
+    // Parse the script into commands array
+    while ((command = strtok_r(rest, commandDelimiter, &rest)) != NULL && *numCommands < MAX_COMMANDS) {
+        parseCommands(command, commands[*numCommands], &numParams[*numCommands]);
+        (*numCommands)++;
+    }
+
+    free(rest_copy);  // Free the original memory allocation
+}
+
+int executeScript(char *script) {
+
+
+    int numCommands = 0;
+    int numParams[MAX_COMMANDS] = {0};
+    char commands[MAX_COMMANDS][MAX_PARAMS][MAX_PARAM_LENGTH];
+
+    parseScript(script, commands, &numCommands, numParams);
+
+
+    // Output the parsed commands and parameters
+    for (int i = 0; i < numCommands; ++i) {
+
+        if (strcmp(commands[i][0], "MOVE") == 0) {
+            printf("MOVE DETECTED\n");
+            move(stringToEnum(commands[i][1]), atoi(commands[i][2]));
+
+        } else if (strcmp(commands[i][0], "HOME") == 0) {
+            printf("HOME DETECTED\n");
+        } else if (strcmp(commands[i][0], "MAGNET") == 0) {
+            printf("MAGNET DETECTED\n");
         }
-        m = strtok(NULL, " ");
-        count++;
     }
-    printf(" full command = %s\n", command);
-    printf("action = %s\n", action);
-    printf("direction = %s\n", direction);
-    printf(" distance = %d\n", distance);
 
-    if (strlen(command) < 3) {
-        printf("UNKNOWN COMMAND\n");
-        return 1;
+    // Output the parsed commands and parameters
+    for (int i = 0; i < numCommands; ++i) {
+        printf("{");
+        for (int j = 0; j < numParams[i]; ++j) {
+            printf("%s", commands[i][j]);
+            if (j < numParams[i] - 1) {
+                printf(", ");
+            }
+        }
+
     }
-    if (strcmp(action, "MOVE") == 0) {
-        printf("MOVE DETECTED\n");
-        move(stringToEnum(direction), distance);
-    }
-    return 1;
+    printf("}\n");
+
+
+    return 0;
 }
 
 void app_main(void) {
@@ -222,31 +271,24 @@ void app_main(void) {
 //    initNvs();
 //    setupWifi();
 //    startWebserver();
-    startBT();
+//    startBT();
 
-//    ESP_LOGI(TAG_RMT, "Initialize EN + DIR GPIO");
-//    gpio_config_t en_dir_gpio_config = {
-//            .mode = GPIO_MODE_OUTPUT,
-//            .intr_type = GPIO_INTR_DISABLE,
-//            .pin_bit_mask = GPIO_OUTPUT_PIN_SEL
-//    };
+    ESP_LOGI(TAG_RMT, "Initialize EN + DIR GPIO");
+    gpio_config_t en_dir_gpio_config = {
+            .mode = GPIO_MODE_OUTPUT,
+            .intr_type = GPIO_INTR_DISABLE,
+            .pin_bit_mask = GPIO_OUTPUT_PIN_SEL
+    };
 
 //    en_dir_gpio_config.pin_bit_mask = GPIO_INPUT_PIN_SEL;
 //    en_dir_gpio_config.mode = GPIO_MODE_INPUT;
 //    en_dir_gpio_config.pull_up_en = 1;
 //    gpio_config(&en_dir_gpio_config);
 
-//    ESP_ERROR_CHECK(gpio_config(&en_dir_gpio_config));
+    ESP_ERROR_CHECK(gpio_config(&en_dir_gpio_config));
 //
-//    setupRMT();
-//
-//    executeCommand("MOVE NE 2\n");
-//    executeCommand("MOVE SE 2\n");
-//    executeCommand("MOVE SW 2\n");
-//    executeCommand("MOVE NW 2\n");
-//
-//    move(SE, 2);
-//    move(SW, 2);
-//    move(NW, 2);
-//    move(NE, 2);
+    setupRMT();
+    char script1[] = "MOVE W 3\nMOVE E 2\nMOVE N 2\nMOVE S 2";
+    char script2[] = "action1 param1 param2\naction2 param3 param4 param5\naction3 param6\n";
+    executeScript(script1);
 }
