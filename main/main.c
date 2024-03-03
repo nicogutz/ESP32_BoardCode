@@ -110,6 +110,17 @@ void enableMotor2() {
     gpio_set_level(STEP_MOTOR_SLP2, 1);
 }
 
+bool isPressed(gpio_num_t input) {
+    return !gpio_get_level(input);
+}
+
+bool isHome() {
+
+    return (isPressed(EMERGENCY_INNER) && isPressed(EMERGENCY_OUTER));
+}
+
+
+
 void toggleMotor(bool switchOn, int motor) {
     if (motor == 1) {
         if (switchOn) {
@@ -154,6 +165,19 @@ int move(Direction dir, int numHalfTiles) {
     ESP_ERROR_CHECK(rmt_tx_wait_all_done(motor_chan, -1));
 
     return tileDistance;
+}
+
+void getHome() {
+    if (!isPressed(EMERGENCY_INNER) || !isPressed(EMERGENCY_OUTER)) {
+        printf("IN GETHOME\n");
+        while (!isPressed(EMERGENCY_INNER)) {
+            move(S, 1);
+        }
+        while (!isPressed(EMERGENCY_OUTER)) {
+            move(W, 1);
+        }
+    }
+    printf("HOME");
 }
 
 void setupRMT() {
@@ -244,6 +268,8 @@ int executeScript(char *script) {
 
         } else if (strcmp(commands[i][0], "HOME") == 0) {
             printf("HOME DETECTED\n");
+            getHome();
+
         } else if (strcmp(commands[i][0], "MAGNET") == 0) {
             printf("MAGNET DETECTED\n");
         }
@@ -274,21 +300,20 @@ void app_main(void) {
 //    startBT();
 
     ESP_LOGI(TAG_RMT, "Initialize EN + DIR GPIO");
-    gpio_config_t en_dir_gpio_config = {
+    gpio_config_t io_config = {
             .mode = GPIO_MODE_OUTPUT,
             .intr_type = GPIO_INTR_DISABLE,
             .pin_bit_mask = GPIO_OUTPUT_PIN_SEL
     };
+    gpio_config(&io_config);
 
-//    en_dir_gpio_config.pin_bit_mask = GPIO_INPUT_PIN_SEL;
-//    en_dir_gpio_config.mode = GPIO_MODE_INPUT;
-//    en_dir_gpio_config.pull_up_en = 1;
-//    gpio_config(&en_dir_gpio_config);
+    io_config.pin_bit_mask = GPIO_INPUT_PIN_SEL;
+    io_config.mode = GPIO_MODE_INPUT;
+    io_config.pull_up_en = 1;
+    gpio_config(&io_config);
 
-    ESP_ERROR_CHECK(gpio_config(&en_dir_gpio_config));
-//
     setupRMT();
-    char script1[] = "MOVE W 3\nMOVE E 2\nMOVE N 2\nMOVE S 2";
-    char script2[] = "action1 param1 param2\naction2 param3 param4 param5\naction3 param6\n";
+
+    char script1[] = "HOME\nMOVE N 4\nMOVE E 4\nMOVE W 3\nMOVE E 3";
     executeScript(script1);
 }

@@ -14,7 +14,7 @@ esp_err_t getStatusHandler(httpd_req_t *req)
     return ESP_OK;
 }
 
-int executeScript(char *command);
+int executeScript(char *script);
 
 esp_err_t postExecuteHandler(httpd_req_t *req)
 {
