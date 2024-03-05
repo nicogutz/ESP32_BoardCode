@@ -24,9 +24,10 @@
 #define STEP_MOTOR_RST1     GPIO_NUM_35
 
 #define STEP_MOTOR_SLP2       GPIO_NUM_21
-
 #define STEP_MOTOR_DIR2      GPIO_NUM_48
 #define STEP_MOTOR_RST2     GPIO_NUM_45
+
+#define EM_TOGGLE   GPIO_NUM_1
 
 #define GPIO_OUTPUT_PIN_SEL  ( (1ULL<<STEP_MOTOR_DIR1)     \
 | (1ULL<<STEP_MOTOR_SLP1)     \
@@ -92,12 +93,12 @@ Direction stringToEnum(const char *dirAsString) {
 
 void disableMotor1() {
     gpio_set_level(STEP_MOTOR_RST1, 0);
-    gpio_set_level(STEP_MOTOR_SLP1, 0);
+    gpio_set_level(STEP_MOTOR_SLP1, 1);
 }
 
 void disableMotor2() {
     gpio_set_level(STEP_MOTOR_RST2, 0);
-    gpio_set_level(STEP_MOTOR_SLP2, 0);
+    gpio_set_level(STEP_MOTOR_SLP2, 1);
 }
 
 void enableMotor1() {
@@ -227,7 +228,7 @@ void parseCommands(const char command[], char Params[MAX_PARAMS][MAX_PARAM_LENGT
 void parseScript(const char script[], char commands[MAX_COMMANDS][MAX_PARAMS][MAX_PARAM_LENGTH], int *numCommands,
                  int *numParams) {
     *numCommands = 0;
-    const char commandDelimiter[] = "\n";
+    const char commandDelimiter[] = "-";
 
     char *rest, *command;
 
@@ -294,6 +295,9 @@ int executeScript(char *script) {
 
 void app_main(void) {
 
+    disableMotor1();
+    disableMotor2();
+
 //    initNvs();
 //    setupWifi();
 //    startWebserver();
@@ -314,6 +318,6 @@ void app_main(void) {
 
     setupRMT();
 
-    char script1[] = "HOME\nMOVE N 4\nMOVE E 4\nMOVE W 3\nMOVE E 3";
-    executeScript(script1);
+    char script[] = "MOVE NE 4-MOVE SW 4";
+    executeScript(script);
 }
