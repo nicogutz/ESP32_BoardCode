@@ -4,20 +4,22 @@
  * SPDX-License-Identifier: Unlicense OR CC0-1.0
  */
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "driver/rmt_tx.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include "stepper_motor_encoder.h"
 #include <string.h>
+#include "rom/gpio.h"
+#include "include/soc/gpio_sig_map.h"
 
 #include "wifi.h"
 #include "http.h"
 #include "bt_server.h"
 
 
-#define STEP_MOTOR_GPIO_STEP     GPIO_NUM_37
+#define STEP_MOTOR_GPIO_STEP1     GPIO_NUM_37
+#define STEP_MOTOR_GPIO_STEP2     GPIO_NUM_47
+
 
 #define STEP_MOTOR_SLP1       GPIO_NUM_36
 #define STEP_MOTOR_DIR1      GPIO_NUM_38
@@ -29,12 +31,18 @@
 
 #define EM_TOGGLE   GPIO_NUM_1
 
+#define GPIO_OUTPUT_RMT_SEL \
+((1ULL<<STEP_MOTOR_GPIO_STEP1) \
+| (1ULL<<STEP_MOTOR_GPIO_STEP2))
+
 #define GPIO_OUTPUT_PIN_SEL  ( (1ULL<<STEP_MOTOR_DIR1)     \
 | (1ULL<<STEP_MOTOR_SLP1)     \
 | (1ULL<<STEP_MOTOR_RST1)     \
 | (1ULL<<STEP_MOTOR_DIR2)     \
 | (1ULL<<STEP_MOTOR_SLP2)     \
-| (1ULL<<STEP_MOTOR_RST2))
+| (1ULL<<STEP_MOTOR_RST2)     \
+| (1ULL<<EM_TOGGLE))                                       \
+| (GPIO_OUTPUT_RMT_SEL)
 
 #define EMERGENCY_OUTER    GPIO_NUM_5
 #define EMERGENCY_INNER    GPIO_NUM_7
@@ -44,19 +52,19 @@
 | (1ULL<<EMERGENCY_INNER))
 
 #define ORTHOGONAL_TILE_IN_STEPS 5626
-#define DIAGONAL_TILE_IN_STEPS 7956
+#define DIAGONAL_TILE_IN_STEPS 8668
 
 #define STEP_MOTOR_RESOLUTION_HZ 1000000 // 1MHz resolution
 #define TAG_RMT "RMT"
 
-const static uint32_t uniform_speed_hz = 10000;
+const static uint32_t uniform_speed_hz = 5000;
 
 #define MAX_COMMANDS 10
 #define MAX_PARAMS 10
 #define MAX_PARAM_LENGTH 10
 
 typedef enum {
-    W = 0, E = 1, N = 2, S = 3, NE = 4, NW = 5, SW = 6, SE = 7
+    N = 0, S = 1, W = 2, E = 3, NE = 4, NW = 5, SW = 6, SE = 7
 } Direction;
 
 static const int dirConfigs[8][4] = {{1, 1, 1, 1}, // N
@@ -116,10 +124,8 @@ bool isPressed(gpio_num_t input) {
 }
 
 bool isHome() {
-
     return (isPressed(EMERGENCY_INNER) && isPressed(EMERGENCY_OUTER));
 }
-
 
 
 void toggleMotor(bool switchOn, int motor) {
@@ -138,12 +144,59 @@ void toggleMotor(bool switchOn, int motor) {
     }
 }
 
+void toggleMagnet(char *switchOn) {
+
+    if (strcmp(switchOn, "1") == 0) {
+        gpio_set_level(EM_TOGGLE, 1);
+    } else if (strcmp(switchOn, "0") == 0) {
+        gpio_set_level(EM_TOGGLE, 0);
+    }
+}
+
+bool canMoveto(Direction dir){
+    switch(dir){
+        case N:
+            return true;
+        case S:
+            if(!isPressed(EMERGENCY_INNER)){
+                return true;
+            } else return false;
+        case W:
+            if(!isPressed(EMERGENCY_OUTER)){
+                return true;
+            } else return false;
+        case E:
+            return true;
+        case NE:
+            return true;
+        case NW:
+            if(!isPressed(EMERGENCY_OUTER)){
+                return true;
+            } else return false;
+        case SW:
+            if(!isPressed(EMERGENCY_OUTER) && !isPressed(EMERGENCY_INNER)){
+                return true;
+            } else return false;
+        case SE:
+            if(!isPressed(EMERGENCY_INNER)){
+                return true;
+            } else return false;
+    }
+    return false;
+}
+
 int move(Direction dir, int numHalfTiles) {
     int tileDistance;
     if (dir > 3) {
         tileDistance = (DIAGONAL_TILE_IN_STEPS / 2) * numHalfTiles;
+        if (dir % 2 == 0) {
+            gpio_matrix_out(STEP_MOTOR_GPIO_STEP2, SIG_GPIO_OUT_IDX, false, false);
+        } else {
+            gpio_matrix_out(STEP_MOTOR_GPIO_STEP1, SIG_GPIO_OUT_IDX, false, false);
+        }
     } else {
         tileDistance = (ORTHOGONAL_TILE_IN_STEPS / 2) * numHalfTiles;
+
     }
 
     gpio_set_level(STEP_MOTOR_DIR1, dirConfigs[dir][0]);
@@ -153,17 +206,24 @@ int move(Direction dir, int numHalfTiles) {
     printf("dirConfigs %i : DIR1 = %i, DIR2 = %i, M1  = %i, M2  = %i \n", dir, dirConfigs[dir][0],
            dirConfigs[dir][1], dirConfigs[dir][2], dirConfigs[dir][3]);
 
-    ESP_LOGI(TAG_RMT, "Spin motor for 6000 steps: 500 accel + 5000 uniform + 500 decel");
-    rmt_transmit_config_t tx_config = {
-            .loop_count = tileDistance,
-    };
+    if (canMoveto(dir)) {
+        rmt_transmit_config_t tx_config = {
+                .loop_count = tileDistance,
+        };
 
-    // uniform phase
-    ESP_ERROR_CHECK(rmt_transmit(motor_chan, uniform_motor_encoder,
-                                 &uniform_speed_hz, sizeof(uniform_speed_hz), &tx_config));
+        // uniform phase
+        ESP_ERROR_CHECK(rmt_transmit(motor_chan, uniform_motor_encoder,
+                                     &uniform_speed_hz, sizeof(uniform_speed_hz), &tx_config));
 
-    // wait all transactions finished
-    ESP_ERROR_CHECK(rmt_tx_wait_all_done(motor_chan, -1));
+        // wait all transactions finished
+        ESP_ERROR_CHECK(rmt_tx_wait_all_done(motor_chan, -1));
+    }
+
+    disableMotor1();
+    disableMotor2();
+
+    gpio_matrix_out(STEP_MOTOR_GPIO_STEP1, RMT_SIG_OUT0_IDX, false, false);
+    gpio_matrix_out(STEP_MOTOR_GPIO_STEP2, RMT_SIG_OUT0_IDX, false, false);
 
     return tileDistance;
 }
@@ -185,12 +245,15 @@ void setupRMT() {
     ESP_LOGI(TAG_RMT, "Create RMT TX channel");
     rmt_tx_channel_config_t tx_chan_config = {
             .clk_src = RMT_CLK_SRC_DEFAULT, // select clock source
-            .gpio_num = STEP_MOTOR_GPIO_STEP,
+            .gpio_num = STEP_MOTOR_GPIO_STEP1,
             .mem_block_symbols = 64,
             .resolution_hz = STEP_MOTOR_RESOLUTION_HZ,
             .trans_queue_depth = 10, // set the number of transactions that can be pending in the background
     };
     ESP_ERROR_CHECK(rmt_new_tx_channel(&tx_chan_config, &motor_chan));
+
+    //SIG_GPIO_OUT_IDX
+    gpio_matrix_out(STEP_MOTOR_GPIO_STEP2, RMT_SIG_OUT0_IDX, false, false);
 
     stepper_motor_uniform_encoder_config_t uniform_encoder_config = {
             .resolution = STEP_MOTOR_RESOLUTION_HZ,
@@ -202,7 +265,7 @@ void setupRMT() {
     ESP_ERROR_CHECK(rmt_enable(motor_chan));
 }
 
-void parseCommands(const char command[], char Params[MAX_PARAMS][MAX_PARAM_LENGTH], int *numParams) {
+void parseCommands(const char command[], char params[MAX_PARAMS][MAX_PARAM_LENGTH], int *numParams) {
     *numParams = 0;
     const char delimiter[] = " ";
     char *rest, *token;
@@ -218,7 +281,7 @@ void parseCommands(const char command[], char Params[MAX_PARAMS][MAX_PARAM_LENGT
 
     // Parse the command into Params array
     while ((token = strtok_r(rest, delimiter, &rest)) != NULL && *numParams < MAX_PARAMS) {
-        strcpy(Params[*numParams], token);
+        strcpy(params[*numParams], token);
         (*numParams)++;
     }
 
@@ -273,6 +336,8 @@ int executeScript(char *script) {
 
         } else if (strcmp(commands[i][0], "MAGNET") == 0) {
             printf("MAGNET DETECTED\n");
+
+            toggleMagnet((commands[i][1]));
         }
     }
 
@@ -298,10 +363,10 @@ void app_main(void) {
     disableMotor1();
     disableMotor2();
 
-//    initNvs();
-//    setupWifi();
-//    startWebserver();
-//    startBT();
+    initNvs();
+    setupWifi();
+    startWebserver();
+    startBT();
 
     ESP_LOGI(TAG_RMT, "Initialize EN + DIR GPIO");
     gpio_config_t io_config = {
@@ -318,6 +383,6 @@ void app_main(void) {
 
     setupRMT();
 
-    char script[] = "MOVE NE 4-MOVE SW 4";
-    executeScript(script);
+//    char script[] = "MOVE N 2-MOVE S 2-MOVE E 2-MOVE W 2-";
+//    executeScript(script);
 }
