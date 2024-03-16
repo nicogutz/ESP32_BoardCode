@@ -12,9 +12,20 @@
 #include "rom/gpio.h"
 #include "include/soc/gpio_sig_map.h"
 
+
+
+//#define USE_WIFI
+#define USE_BLUETOOTH
+
+#ifdef USE_WIFI
 #include "wifi.h"
 #include "http.h"
+
+#elif defined(USE_BLUETOOTH)
 #include "bt_server.h"
+#else
+  #error "Please define either USE_WIFI or USE_BLUETOOTH"
+#endif
 
 
 #define STEP_MOTOR_GPIO_STEP1     GPIO_NUM_37
@@ -363,10 +374,14 @@ void app_main(void) {
     disableMotor1();
     disableMotor2();
 
-    initNvs();
-    setupWifi();
-    startWebserver();
-    startBT();
+    #ifdef USE_WIFI
+        initNvs();
+        setupWifi();
+        startWebserver();
+    #elif defined(USE_BLUETOOTH)
+        startBT();
+    #endif
+
 
     ESP_LOGI(TAG_RMT, "Initialize EN + DIR GPIO");
     gpio_config_t io_config = {
@@ -383,6 +398,4 @@ void app_main(void) {
 
     setupRMT();
 
-//    char script[] = "MOVE N 2-MOVE S 2-MOVE E 2-MOVE W 2-";
-//    executeScript(script);
 }
