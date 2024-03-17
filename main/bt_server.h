@@ -15,19 +15,17 @@
 enum
 {
     IDX_SVC,
-    IDX_CHAR_A,
-    IDX_CHAR_VAL_A,
-    IDX_CHAR_CFG_A,
+    IDX_CHAR_MOTOR,
+    IDX_CHAR_VAL_MOTOR,
 
-    IDX_CHAR_B,
-    IDX_CHAR_VAL_B,
+    IDX_CHAR_BOARD,
+    IDX_CHAR_VAL_BOARD,
+    IDX_CHAR_CFG_BOARD,
 
-    IDX_CHAR_C,
-    IDX_CHAR_VAL_C,
-
-    HRS_IDX_NB,
+    CHESS_IDX_NB,
 };
 
 void startBT();
+void notifyBoard();
 
 #endif //ESP32_BOARDCODE_BT_SERVER_H
