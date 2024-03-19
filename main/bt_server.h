@@ -26,6 +26,6 @@ enum
 };
 
 void startBT();
-void notifyBoard();
+void notifyBoard(uint64_t board);
 
 #endif //ESP32_BOARDCODE_BT_SERVER_H

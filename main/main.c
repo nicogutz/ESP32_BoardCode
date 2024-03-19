@@ -11,7 +11,17 @@
 #include <string.h>
 #include "rom/gpio.h"
 #include "include/soc/gpio_sig_map.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
+#define MUX_RST    GPIO_NUM_8
+#define MUX_CLK    GPIO_NUM_18
+#define GPIO_OUTPUT_MUX_SEL  ((1ULL<<MUX_RST) | (1ULL<<MUX_CLK))
+
+#define SENSOR_ARRAY     GPIO_NUM_17
+//#define GPIO_INPUT_PIN_SEL  (1ULL<<SENSOR_ARRAY)
 
 
 //#define USE_WIFI
@@ -22,9 +32,11 @@
 #include "http.h"
 
 #elif defined(USE_BLUETOOTH)
+
 #include "bt_server.h"
+
 #else
-  #error "Please define either USE_WIFI or USE_BLUETOOTH"
+#error "Please define either USE_WIFI or USE_BLUETOOTH"
 #endif
 
 
@@ -46,17 +58,17 @@
 ((1ULL<<STEP_MOTOR_GPIO_STEP1) \
 | (1ULL<<STEP_MOTOR_GPIO_STEP2))
 
-#define GPIO_OUTPUT_PIN_SEL  ( (1ULL<<STEP_MOTOR_DIR1)     \
+#define GPIO_OUTPUT_PIN_SEL  (( (1ULL<<STEP_MOTOR_DIR1)     \
 | (1ULL<<STEP_MOTOR_SLP1)     \
 | (1ULL<<STEP_MOTOR_RST1)     \
 | (1ULL<<STEP_MOTOR_DIR2)     \
 | (1ULL<<STEP_MOTOR_SLP2)     \
 | (1ULL<<STEP_MOTOR_RST2)     \
 | (1ULL<<EM_TOGGLE))                                       \
-| (GPIO_OUTPUT_RMT_SEL)
+| (GPIO_OUTPUT_RMT_SEL))
 
-#define EMERGENCY_OUTER    GPIO_NUM_5
-#define EMERGENCY_INNER    GPIO_NUM_7
+#define EMERGENCY_OUTER    GPIO_NUM_16
+#define EMERGENCY_INNER    GPIO_NUM_15
 
 #define GPIO_INPUT_PIN_SEL \
 ((1ULL<<EMERGENCY_OUTER) \
@@ -86,6 +98,75 @@ static const int dirConfigs[8][4] = {{1, 1, 1, 1}, // N
                                      {0, 1, 0, 1}, // NW
                                      {0, 0, 1, 0}, // SW
                                      {0, 0, 0, 1}};// SE
+
+const uint8_t positions[] = {
+        49,
+        51,
+        55,
+        53,
+        57,
+        59,
+        61,
+        63,
+        64,
+        62,
+        60,
+        58,
+        56,
+        54,
+        52,
+        50,
+        33,
+        35,
+        37,
+        39,
+        41,
+        43,
+        45,
+        47,
+        48,
+        46,
+        44,
+        42,
+        40,
+        38,
+        36,
+        34,
+        17,
+        19,
+        21,
+        23,
+        25,
+        27,
+        29,
+        31,
+        32,
+        30,
+        28,
+        26,
+        24,
+        22,
+        20,
+        18,
+        1,
+        3,
+        5,
+        7,
+        9,
+        11,
+        13,
+        15,
+        16,
+        14,
+        12,
+        10,
+        8,
+        6,
+        4,
+        2
+
+};
+
 
 rmt_channel_handle_t motor_chan = NULL;
 rmt_encoder_handle_t uniform_motor_encoder = NULL;
@@ -164,16 +245,16 @@ void toggleMagnet(char *switchOn) {
     }
 }
 
-bool canMoveto(Direction dir){
-    switch(dir){
+bool canMoveto(Direction dir) {
+    switch (dir) {
         case N:
             return true;
         case S:
-            if(!isPressed(EMERGENCY_INNER)){
+            if (!isPressed(EMERGENCY_INNER)) {
                 return true;
             } else return false;
         case W:
-            if(!isPressed(EMERGENCY_OUTER)){
+            if (!isPressed(EMERGENCY_OUTER)) {
                 return true;
             } else return false;
         case E:
@@ -181,23 +262,23 @@ bool canMoveto(Direction dir){
         case NE:
             return true;
         case NW:
-            if(!isPressed(EMERGENCY_OUTER)){
+            if (!isPressed(EMERGENCY_OUTER)) {
                 return true;
             } else return false;
         case SW:
-            if(!isPressed(EMERGENCY_OUTER) && !isPressed(EMERGENCY_INNER)){
+            if (!isPressed(EMERGENCY_OUTER) && !isPressed(EMERGENCY_INNER)) {
                 return true;
             } else return false;
         case SE:
-            if(!isPressed(EMERGENCY_INNER)){
+            if (!isPressed(EMERGENCY_INNER)) {
                 return true;
             } else return false;
     }
     return false;
 }
 
-int move(Direction dir, int numHalfTiles) {
-    int tileDistance;
+int move(Direction dir, double numHalfTiles) {
+    double tileDistance;
     if (dir > 3) {
         tileDistance = (DIAGONAL_TILE_IN_STEPS / 2) * numHalfTiles;
         if (dir % 2 == 0) {
@@ -243,10 +324,10 @@ void getHome() {
     if (!isPressed(EMERGENCY_INNER) || !isPressed(EMERGENCY_OUTER)) {
         printf("IN GETHOME\n");
         while (!isPressed(EMERGENCY_INNER)) {
-            move(S, 1);
+            move(S, .1);
         }
         while (!isPressed(EMERGENCY_OUTER)) {
-            move(W, 1);
+            move(W, .1);
         }
     }
     printf("HOME");
@@ -324,6 +405,46 @@ void parseScript(const char script[], char commands[MAX_COMMANDS][MAX_PARAMS][MA
     free(rest_copy);  // Free the original memory allocation
 }
 
+uint64_t readSensors() {
+    uint64_t board[2] = {0};
+    // Equivalent to loop()
+    vTaskDelay(50 / portTICK_PERIOD_MS);
+    gpio_set_level(MUX_CLK, 0);
+    vTaskDelay(1 / portTICK_PERIOD_MS);
+    gpio_set_level(MUX_CLK, 1);
+
+    vTaskDelay(1 / portTICK_PERIOD_MS);
+    gpio_set_level(MUX_RST, 1);
+    vTaskDelay(1 / portTICK_PERIOD_MS);
+    gpio_set_level(MUX_RST, 0);
+    vTaskDelay(1 / portTICK_PERIOD_MS);
+
+    // Wait 1s
+    for (int j = 0; j < 2; ++j) {
+
+        for (int i = 0; i < 64; i++) {
+
+            if (!gpio_get_level(SENSOR_ARRAY)) {
+                board[j] = board[j] | ((uint64_t) !gpio_get_level(SENSOR_ARRAY) << (positions[i] - 1));
+                vTaskDelay(150 / portTICK_PERIOD_MS);
+            }
+            gpio_set_level(MUX_CLK, 0);
+            // Delay 50 ms
+            vTaskDelay(15 / portTICK_PERIOD_MS);
+            // Set HIGH
+            gpio_set_level(MUX_CLK, 1);
+            vTaskDelay(15 / portTICK_PERIOD_MS);
+        }
+    }
+    printf("0x%" PRIx64 "\n", board[0]);
+    if(board[1] == board[0]){
+        return board[0];
+    } else {
+        return readSensors();
+    }
+}
+
+
 int executeScript(char *script) {
 
 
@@ -349,6 +470,9 @@ int executeScript(char *script) {
             printf("MAGNET DETECTED\n");
 
             toggleMagnet((commands[i][1]));
+        } else if (strcmp(commands[i][0], "READ") == 0) {
+            notifyBoard(readSensors());
+            printf("READ DETECTED\n");
         }
     }
 
@@ -369,18 +493,20 @@ int executeScript(char *script) {
     return 0;
 }
 
+
 void app_main(void) {
 
     disableMotor1();
     disableMotor2();
 
-    #ifdef USE_WIFI
-        initNvs();
-        setupWifi();
-        startWebserver();
-    #elif defined(USE_BLUETOOTH)
-        startBT();
-    #endif
+#ifdef USE_WIFI
+    initNvs();
+    setupWifi();
+    startWebserver();
+#elif defined(USE_BLUETOOTH)
+    startBT();
+
+#endif
 
 
     ESP_LOGI(TAG_RMT, "Initialize EN + DIR GPIO");
@@ -396,6 +522,18 @@ void app_main(void) {
     io_config.pull_up_en = 1;
     gpio_config(&io_config);
 
-    setupRMT();
+    io_config.pin_bit_mask = GPIO_OUTPUT_MUX_SEL;
+    io_config.intr_type = GPIO_INTR_DISABLE;
+    io_config.mode = GPIO_MODE_OUTPUT;
+    io_config.pull_down_en = 0;
+    io_config.pull_up_en = 0;
+    gpio_config(&io_config);
 
+    io_config.pin_bit_mask = SENSOR_ARRAY;
+    io_config.mode = GPIO_MODE_INPUT;
+
+    gpio_config(&io_config);
+
+    setupRMT();
+//    readSensors();
 }

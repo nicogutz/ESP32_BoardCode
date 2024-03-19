@@ -388,6 +388,7 @@ gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, 
                         ESP_LOGI(GATTS_TABLE_TAG, "notify enable");
                         notify_board_gatts_if = gatts_if;
                         notify_board_conn_id = param->write.conn_id;
+
                     } else if (descr_value == 0x0000) {
                         ESP_LOGI(GATTS_TABLE_TAG, "notify/indicate disable ");
                         notify_board_gatts_if = 0;
@@ -474,18 +475,18 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
     } while (0);
 }
 
-void notifyBoard(int board[64]) {
-    ESP_LOGI(GATTS_TABLE_TAG, "notify enable");
-    uint8_t notify_data[15];
-    for (int i = 0; i < sizeof(notify_data); ++i) {
-        notify_data[i] = i % 0xff;
+void notifyBoard(uint64_t board) {
+    // Convert the pointer to uint64_t array to a pointer to uint8_t
+    uint8_t board_ptr[8];
+    for (int i = 0; i <8; ++i) {
+        printf("0x%" PRIx8 "\n", (uint8_t)(board >> i*8));
+        board_ptr[i] = (uint8_t)(board >> i*8);
     }
     //the size of notify_data[] need less than MTU size
     esp_ble_gatts_send_indicate(notify_board_gatts_if, notify_board_conn_id, chess_handle_table[IDX_CHAR_VAL_BOARD],
-                                sizeof(notify_data), notify_data, false);
+                                sizeof(board_ptr), board_ptr, false);
 
 }
-
 
 void startBT() {
 
