@@ -325,19 +325,6 @@ void example_prepare_write_event_env(esp_gatt_if_t gatts_if, prepare_type_env_t 
 
 }
 
-//void example_exec_write_event_env(prepare_type_env_t *prepare_write_env, esp_ble_gatts_cb_param_t *param){
-//    if (param->exec_write.exec_write_flag == ESP_GATT_PREP_WRITE_EXEC && prepare_write_env->prepare_buf){
-//        esp_log_buffer_hex(GATTS_TABLE_TAG, prepare_write_env->prepare_buf, prepare_write_env->prepare_len);
-//    }else{
-//        ESP_LOGI(GATTS_TABLE_TAG,"ESP_GATT_PREP_WRITE_CANCEL");
-//    }
-//    if (prepare_write_env->prepare_buf) {
-//        free(prepare_write_env->prepare_buf);
-//        prepare_write_env->prepare_buf = NULL;
-//    }
-//    prepare_write_env->prepare_len = 0;
-//}
-
 static void
 gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param) {
     switch (event) {
@@ -424,21 +411,6 @@ gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, 
                 example_prepare_write_event_env(gatts_if, &prepare_write_env, param);
             }
             break;
-
-//        case ESP_GATTS_EXEC_WRITE_EVT:
-//            // the length of gattc prepare write data must be less than GATTS_DEMO_CHAR_VAL_LEN_MAX.
-//            ESP_LOGI(GATTS_TABLE_TAG, "ESP_GATTS_EXEC_WRITE_EVT");
-//            example_exec_write_event_env(&prepare_write_env, param);
-//            break;
-//        case ESP_GATTS_MTU_EVT:
-//            ESP_LOGI(GATTS_TABLE_TAG, "ESP_GATTS_MTU_EVT, MTU %d", param->mtu.mtu);
-//            break;
-//        case ESP_GATTS_CONF_EVT:
-//            ESP_LOGI(GATTS_TABLE_TAG, "ESP_GATTS_CONF_EVT, status = %d, attr_handle %d", param->conf.status, param->conf.handle);
-//            break;
-//        case ESP_GATTS_START_EVT:
-//            ESP_LOGI(GATTS_TABLE_TAG, "SERVICE_START_EVT, status %d, service_handle %d", param->start.status, param->start.service_handle);
-//            break;
         case ESP_GATTS_CONNECT_EVT:
             ESP_LOGI(GATTS_TABLE_TAG, "ESP_GATTS_CONNECT_EVT, conn_id = %d", param->connect.conn_id);
                     esp_log_buffer_hex(GATTS_TABLE_TAG, param->connect.remote_bda, 6);
@@ -470,14 +442,6 @@ gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, 
             }
             break;
         }
-//        case ESP_GATTS_STOP_EVT:
-//        case ESP_GATTS_OPEN_EVT:
-//        case ESP_GATTS_CANCEL_OPEN_EVT:
-//        case ESP_GATTS_CLOSE_EVT:
-//        case ESP_GATTS_LISTEN_EVT:
-//        case ESP_GATTS_CONGEST_EVT:
-//        case ESP_GATTS_UNREG_EVT:
-//        case ESP_GATTS_DELETE_EVT:
         default:
             break;
     }
