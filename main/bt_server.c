@@ -4,17 +4,6 @@
  * SPDX-License-Identifier: Unlicense OR CC0-1.0
  */
 
-/****************************************************************************
-*
-* This demo showcases creating a GATT database using a predefined attribute table.
-* It acts as a GATT server and can send adv data, be connected by client.
-* Run the gatt_client demo, the client demo will automatically connect to the gatt_server_service_table demo.
-* Client demo will enable GATT server's notify after connection. The two devices will then exchange
-* data.
-*
-****************************************************************************/
-
-
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
@@ -478,9 +467,9 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
 void notifyBoard(uint64_t board) {
     // Convert the pointer to uint64_t array to a pointer to uint8_t
     uint8_t board_ptr[8];
-    for (int i = 0; i <8; ++i) {
-        printf("0x%" PRIx8 "\n", (uint8_t)(board >> i*8));
-        board_ptr[i] = (uint8_t)(board >> i*8);
+    for (int i = 0; i < 8; ++i) {
+        printf("0x%" PRIx8 "\n", (uint8_t) (board >> i * 8));
+        board_ptr[i] = (uint8_t) (board >> i * 8);
     }
     //the size of notify_data[] need less than MTU size
     esp_ble_gatts_send_indicate(notify_board_gatts_if, notify_board_conn_id, chess_handle_table[IDX_CHAR_VAL_BOARD],

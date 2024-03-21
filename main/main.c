@@ -13,6 +13,7 @@
 #include "include/soc/gpio_sig_map.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/types.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -357,27 +358,32 @@ void setupRMT() {
     ESP_ERROR_CHECK(rmt_enable(motor_chan));
 }
 
-void parseCommands(const char command[], char params[MAX_PARAMS][MAX_PARAM_LENGTH], int *numParams) {
-    *numParams = 0;
-    const char delimiter[] = " ";
-    char *rest, *token;
+void parseCommands(u_int16_t command) {
+    u_int8_t action = (command & 0b110000000) >> 7;
+    u_int8_t param1 = (command & 0b001110000) >> 4;
+    u_int8_t param2 = (command & 0b000001111);
 
-    rest = strdup(command);
-
-    if (rest == NULL) {
-        perror("Memory allocation error");
-        exit(EXIT_FAILURE);
+    switch(action){
+        case 0xC0:
+            printf("HOME\n");
+            getHome();
+            break;
+        case 0x80:
+            printf("MAGNET\n");
+            if(param1 > 0){
+                toggleMagnet("1");
+            } else{
+                toggleMagnet("0");
+            }
+            break;
+        case 0x40:
+            printf("MOVE\n");
+            move(param1, param2);
+            break;
+        case 0x00:
+            printf("NOP\n");
+            break;
     }
-
-    char *rest_copy = rest;  // Store a copy of the pointer to free later
-
-    // Parse the command into Params array
-    while ((token = strtok_r(rest, delimiter, &rest)) != NULL && *numParams < MAX_PARAMS) {
-        strcpy(params[*numParams], token);
-        (*numParams)++;
-    }
-
-    free(rest_copy);  // Free the original memory allocation
 }
 
 void parseScript(const char script[], char commands[MAX_COMMANDS][MAX_PARAMS][MAX_PARAM_LENGTH], int *numCommands,
@@ -437,7 +443,7 @@ uint64_t readSensors() {
         }
     }
     printf("0x%" PRIx64 "\n", board[0]);
-    if(board[1] == board[0]){
+    if (board[1] == board[0]) {
         return board[0];
     } else {
         return readSensors();
@@ -488,8 +494,6 @@ int executeScript(char *script) {
 
     }
     printf("}\n");
-
-
     return 0;
 }
 
@@ -535,5 +539,4 @@ void app_main(void) {
     gpio_config(&io_config);
 
     setupRMT();
-//    readSensors();
 }
