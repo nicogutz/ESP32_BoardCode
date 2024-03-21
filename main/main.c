@@ -4,33 +4,35 @@
  * SPDX-License-Identifier: Unlicense OR CC0-1.0
  */
 
-#include "driver/rmt_tx.h"
-#include "driver/gpio.h"
-#include "esp_log.h"
-#include "stepper_motor_encoder.h"
-#include <string.h>
-#include "rom/gpio.h"
-#include "include/soc/gpio_sig_map.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/types.h>
+#include <string.h>
+
+#include "driver/gpio.h"
+#include "driver/rmt_tx.h"
+#include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "include/soc/gpio_sig_map.h"
+#include "math.h"
+#include "rom/gpio.h"
+#include "stepper_motor_encoder.h"
 
-#define MUX_RST    GPIO_NUM_8
-#define MUX_CLK    GPIO_NUM_18
-#define GPIO_OUTPUT_MUX_SEL  ((1ULL<<MUX_RST) | (1ULL<<MUX_CLK))
+#define MUX_RST GPIO_NUM_8
+#define MUX_CLK GPIO_NUM_18
+#define GPIO_OUTPUT_MUX_SEL ((1ULL << MUX_RST) | (1ULL << MUX_CLK))
 
-#define SENSOR_ARRAY     GPIO_NUM_17
-//#define GPIO_INPUT_PIN_SEL  (1ULL<<SENSOR_ARRAY)
+#define SENSOR_ARRAY GPIO_NUM_17
+// #define GPIO_INPUT_PIN_SEL  (1ULL<<SENSOR_ARRAY)
 
-
+// #define USE_WIFI
+  #define USE_BLUETOOTH
 //#define USE_WIFI
-#define USE_BLUETOOTH
 
 #ifdef USE_WIFI
-#include "wifi.h"
+
 #include "http.h"
+#include "wifi.h"
 
 #elif defined(USE_BLUETOOTH)
 
@@ -40,65 +42,63 @@
 #error "Please define either USE_WIFI or USE_BLUETOOTH"
 #endif
 
+#define STEP_MOTOR_GPIO_STEP1 GPIO_NUM_37
+#define STEP_MOTOR_GPIO_STEP2 GPIO_NUM_47
 
-#define STEP_MOTOR_GPIO_STEP1     GPIO_NUM_37
-#define STEP_MOTOR_GPIO_STEP2     GPIO_NUM_47
+#define STEP_MOTOR_SLP1 GPIO_NUM_36
+#define STEP_MOTOR_DIR1 GPIO_NUM_38
+#define STEP_MOTOR_RST1 GPIO_NUM_35
 
+#define STEP_MOTOR_SLP2 GPIO_NUM_21
+#define STEP_MOTOR_DIR2 GPIO_NUM_48
+#define STEP_MOTOR_RST2 GPIO_NUM_45
 
-#define STEP_MOTOR_SLP1       GPIO_NUM_36
-#define STEP_MOTOR_DIR1      GPIO_NUM_38
-#define STEP_MOTOR_RST1     GPIO_NUM_35
-
-#define STEP_MOTOR_SLP2       GPIO_NUM_21
-#define STEP_MOTOR_DIR2      GPIO_NUM_48
-#define STEP_MOTOR_RST2     GPIO_NUM_45
-
-#define EM_TOGGLE   GPIO_NUM_1
+#define EM_TOGGLE GPIO_NUM_1
 
 #define GPIO_OUTPUT_RMT_SEL \
-((1ULL<<STEP_MOTOR_GPIO_STEP1) \
-| (1ULL<<STEP_MOTOR_GPIO_STEP2))
+    ((1ULL << STEP_MOTOR_GPIO_STEP1) | (1ULL << STEP_MOTOR_GPIO_STEP2))
 
-#define GPIO_OUTPUT_PIN_SEL  (( (1ULL<<STEP_MOTOR_DIR1)     \
-| (1ULL<<STEP_MOTOR_SLP1)     \
-| (1ULL<<STEP_MOTOR_RST1)     \
-| (1ULL<<STEP_MOTOR_DIR2)     \
-| (1ULL<<STEP_MOTOR_SLP2)     \
-| (1ULL<<STEP_MOTOR_RST2)     \
-| (1ULL<<EM_TOGGLE))                                       \
-| (GPIO_OUTPUT_RMT_SEL))
+#define GPIO_OUTPUT_PIN_SEL (((1ULL << STEP_MOTOR_DIR1) | (1ULL << STEP_MOTOR_SLP1) | (1ULL << STEP_MOTOR_RST1) | (1ULL << STEP_MOTOR_DIR2) | (1ULL << STEP_MOTOR_SLP2) | (1ULL << STEP_MOTOR_RST2) | (1ULL << EM_TOGGLE)) | (GPIO_OUTPUT_RMT_SEL))
 
-#define EMERGENCY_OUTER    GPIO_NUM_16
-#define EMERGENCY_INNER    GPIO_NUM_15
+#define EMERGENCY_OUTER GPIO_NUM_16
+#define EMERGENCY_INNER GPIO_NUM_15
 
 #define GPIO_INPUT_PIN_SEL \
-((1ULL<<EMERGENCY_OUTER) \
-| (1ULL<<EMERGENCY_INNER))
+    ((1ULL << EMERGENCY_OUTER) | (1ULL << EMERGENCY_INNER))
 
 #define ORTHOGONAL_TILE_IN_STEPS 5626
-#define DIAGONAL_TILE_IN_STEPS 8668
+#define DIAGONAL_TILE_IN_STEPS 15913
 
-#define STEP_MOTOR_RESOLUTION_HZ 1000000 // 1MHz resolution
+#define STEP_MOTOR_RESOLUTION_HZ 1000000  // 1MHz resolution
 #define TAG_RMT "RMT"
 
 const static uint32_t uniform_speed_hz = 5000;
 
 #define MAX_COMMANDS 10
+#define MOVE_HEADER_LENGTH 32
 #define MAX_PARAMS 10
 #define MAX_PARAM_LENGTH 10
 
 typedef enum {
-    N = 0, S = 1, W = 2, E = 3, NE = 4, NW = 5, SW = 6, SE = 7
+    N = 0,
+    S = 1,
+    W = 2,
+    E = 3,
+
+    NE = 4,
+    NW = 5,
+    SW = 6,
+    SE = 7
 } Direction;
 
-static const int dirConfigs[8][4] = {{1, 1, 1, 1}, // N
-                                     {0, 0, 1, 1}, // S
-                                     {0, 1, 1, 1}, // W
-                                     {1, 0, 1, 1}, // E
-                                     {1, 0, 1, 0}, // NE
-                                     {0, 1, 0, 1}, // NW
-                                     {0, 0, 1, 0}, // SW
-                                     {0, 0, 0, 1}};// SE
+static const int dirConfigs[8][4] = {{1, 1, 1, 1},   // N
+                                     {0, 0, 1, 1},   // S
+                                     {0, 1, 1, 1},   // W
+                                     {1, 0, 1, 1},   // E
+                                     {1, 0, 1, 0},   // NE
+                                     {0, 1, 0, 1},   // NW
+                                     {0, 0, 1, 0},   // SW
+                                     {0, 0, 0, 1}};  // SE
 
 const uint8_t positions[] = {
         49,
@@ -168,7 +168,6 @@ const uint8_t positions[] = {
 
 };
 
-
 rmt_channel_handle_t motor_chan = NULL;
 rmt_encoder_handle_t uniform_motor_encoder = NULL;
 
@@ -220,7 +219,6 @@ bool isHome() {
     return (isPressed(EMERGENCY_INNER) && isPressed(EMERGENCY_OUTER));
 }
 
-
 void toggleMotor(bool switchOn, int motor) {
     if (motor == 1) {
         if (switchOn) {
@@ -253,11 +251,13 @@ bool canMoveto(Direction dir) {
         case S:
             if (!isPressed(EMERGENCY_INNER)) {
                 return true;
-            } else return false;
+            } else
+                return false;
         case W:
             if (!isPressed(EMERGENCY_OUTER)) {
                 return true;
-            } else return false;
+            } else
+                return false;
         case E:
             return true;
         case NE:
@@ -265,15 +265,18 @@ bool canMoveto(Direction dir) {
         case NW:
             if (!isPressed(EMERGENCY_OUTER)) {
                 return true;
-            } else return false;
+            } else
+                return false;
         case SW:
             if (!isPressed(EMERGENCY_OUTER) && !isPressed(EMERGENCY_INNER)) {
                 return true;
-            } else return false;
+            } else
+                return false;
         case SE:
             if (!isPressed(EMERGENCY_INNER)) {
                 return true;
-            } else return false;
+            } else
+                return false;
     }
     return false;
 }
@@ -281,7 +284,7 @@ bool canMoveto(Direction dir) {
 int move(Direction dir, double numHalfTiles) {
     double tileDistance;
     if (dir > 3) {
-        tileDistance = (DIAGONAL_TILE_IN_STEPS / 2) * numHalfTiles;
+        tileDistance = ((DIAGONAL_TILE_IN_STEPS / 2) * numHalfTiles * 0.75);
         if (dir % 2 == 0) {
             gpio_matrix_out(STEP_MOTOR_GPIO_STEP2, SIG_GPIO_OUT_IDX, false, false);
         } else {
@@ -289,7 +292,6 @@ int move(Direction dir, double numHalfTiles) {
         }
     } else {
         tileDistance = (ORTHOGONAL_TILE_IN_STEPS / 2) * numHalfTiles;
-
     }
 
     gpio_set_level(STEP_MOTOR_DIR1, dirConfigs[dir][0]);
@@ -337,15 +339,15 @@ void getHome() {
 void setupRMT() {
     ESP_LOGI(TAG_RMT, "Create RMT TX channel");
     rmt_tx_channel_config_t tx_chan_config = {
-            .clk_src = RMT_CLK_SRC_DEFAULT, // select clock source
+            .clk_src = RMT_CLK_SRC_DEFAULT,  // select clock source
             .gpio_num = STEP_MOTOR_GPIO_STEP1,
             .mem_block_symbols = 64,
             .resolution_hz = STEP_MOTOR_RESOLUTION_HZ,
-            .trans_queue_depth = 10, // set the number of transactions that can be pending in the background
+            .trans_queue_depth = 10,  // set the number of transactions that can be pending in the background
     };
     ESP_ERROR_CHECK(rmt_new_tx_channel(&tx_chan_config, &motor_chan));
 
-    //SIG_GPIO_OUT_IDX
+    // SIG_GPIO_OUT_IDX
     gpio_matrix_out(STEP_MOTOR_GPIO_STEP2, RMT_SIG_OUT0_IDX, false, false);
 
     stepper_motor_uniform_encoder_config_t uniform_encoder_config = {
@@ -358,57 +360,50 @@ void setupRMT() {
     ESP_ERROR_CHECK(rmt_enable(motor_chan));
 }
 
-void parseCommands(u_int16_t command) {
-    u_int8_t action = (command & 0b110000000) >> 7;
-    u_int8_t param1 = (command & 0b001110000) >> 4;
-    u_int8_t param2 = (command & 0b000001111);
+int parseCommands(uint16_t command) {
 
-    switch(action){
+
+    uint8_t action = (command >> 7) & 0b11;
+    uint8_t param1 = (command >> 4) & 0b111;
+    uint8_t param2 = (command & 0b1111);
+
+    printf("command= %x\n", command);
+
+    printf("action= %x\n", action);
+    printf("param1= %x\n", param1);
+    printf("param2= %x\n", param2);
+
+    switch (action) {
         case 0xC0:
             printf("HOME\n");
             getHome();
-            break;
+            return 0;
         case 0x80:
             printf("MAGNET\n");
-            if(param1 > 0){
+            if (param1 > 0) {
                 toggleMagnet("1");
-            } else{
+            } else {
                 toggleMagnet("0");
             }
-            break;
+            return 0;
         case 0x40:
             printf("MOVE\n");
             move(param1, param2);
-            break;
+            return 0;
         case 0x00:
             printf("NOP\n");
-            break;
+            return 1;
     }
+    return 0;
 }
 
-void parseScript(const char script[], char commands[MAX_COMMANDS][MAX_PARAMS][MAX_PARAM_LENGTH], int *numCommands,
-                 int *numParams) {
-    *numCommands = 0;
-    const char commandDelimiter[] = "-";
-
-    char *rest, *command;
-
-    rest = strdup(script);
-
-    if (rest == NULL) {
-        perror("Memory allocation error");
-        exit(EXIT_FAILURE);
+void parseScript(uintmax_t script) {
+    uint64_t startConfigs = (script >> 33);
+    uintmax_t commands = (script << 33);
+    int commandCount = 0;
+    while (parseCommands(commands >> commandCount * 9) == 0) {
+        commandCount++;
     }
-
-    char *rest_copy = rest;  // Store a copy of the pointer to free later
-
-    // Parse the script into commands array
-    while ((command = strtok_r(rest, commandDelimiter, &rest)) != NULL && *numCommands < MAX_COMMANDS) {
-        parseCommands(command, commands[*numCommands], &numParams[*numCommands]);
-        (*numCommands)++;
-    }
-
-    free(rest_copy);  // Free the original memory allocation
 }
 
 uint64_t readSensors() {
@@ -427,9 +422,7 @@ uint64_t readSensors() {
 
     // Wait 1s
     for (int j = 0; j < 2; ++j) {
-
         for (int i = 0; i < 64; i++) {
-
             if (!gpio_get_level(SENSOR_ARRAY)) {
                 board[j] = board[j] | ((uint64_t) !gpio_get_level(SENSOR_ARRAY) << (positions[i] - 1));
                 vTaskDelay(150 / portTICK_PERIOD_MS);
@@ -450,20 +443,32 @@ uint64_t readSensors() {
     }
 }
 
+int executeScript(uint8_t *script, uint16_t length) {
+    for (int i = 0; i < length; ++i) {
+        printf("%x\n", script[i]);
+    }
+    uint8_t player = script[0];
+    uint16_t timeLocal =  ((uint16_t) script[1]) << 8 | script[2];
+    uint16_t timeRemote = ((uint16_t) script[3]) << 8 | script[4] ;
+    printf("%x %x %x", player, timeLocal, timeRemote);
+    uint16_t command;
+    uint8_t i = 5;
+    do {
+        command = ((uint16_t) script[i]) << 8 | script[i + 1];
+        i++;
+        printf("%x\n", command);
+    } while (!command);
 
-int executeScript(char *script) {
-
-
+    return 1;
+    return 0;
     int numCommands = 0;
     int numParams[MAX_COMMANDS] = {0};
     char commands[MAX_COMMANDS][MAX_PARAMS][MAX_PARAM_LENGTH];
 
-    parseScript(script, commands, &numCommands, numParams);
-
+//    parseScript(script, commands, &numCommands, numParams);
 
     // Output the parsed commands and parameters
     for (int i = 0; i < numCommands; ++i) {
-
         if (strcmp(commands[i][0], "MOVE") == 0) {
             printf("MOVE DETECTED\n");
             move(stringToEnum(commands[i][1]), atoi(commands[i][2]));
@@ -477,8 +482,10 @@ int executeScript(char *script) {
 
             toggleMagnet((commands[i][1]));
         } else if (strcmp(commands[i][0], "READ") == 0) {
+#ifdef USE_BLUETOOTH
             notifyBoard(readSensors());
             printf("READ DETECTED\n");
+#endif
         }
     }
 
@@ -491,18 +498,16 @@ int executeScript(char *script) {
                 printf(", ");
             }
         }
-
     }
     printf("}\n");
+
     return 0;
 }
 
-
 void app_main(void) {
-
     disableMotor1();
     disableMotor2();
-
+//
 #ifdef USE_WIFI
     initNvs();
     setupWifi();
@@ -511,32 +516,33 @@ void app_main(void) {
     startBT();
 
 #endif
+//
+//    ESP_LOGI(TAG_RMT, "Initialize EN + DIR GPIO");
+//    gpio_config_t io_config = {
+//        .mode = GPIO_MODE_OUTPUT,
+//        .intr_type = GPIO_INTR_DISABLE,
+//        .pin_bit_mask = GPIO_OUTPUT_PIN_SEL};
+//    gpio_config(&io_config);
+//
+//    io_config.pin_bit_mask = GPIO_INPUT_PIN_SEL;
+//    io_config.mode = GPIO_MODE_INPUT;
+//    io_config.pull_up_en = 1;
+//    gpio_config(&io_config);
+//
+//    io_config.pin_bit_mask = GPIO_OUTPUT_MUX_SEL;
+//    io_config.intr_type = GPIO_INTR_DISABLE;
+//    io_config.mode = GPIO_MODE_OUTPUT;
+//    io_config.pull_down_en = 0;
+//    io_config.pull_up_en = 0;
+//    gpio_config(&io_config);
+//
+//    io_config.pin_bit_mask = SENSOR_ARRAY;
+//    io_config.mode = GPIO_MODE_INPUT;
+//
+//    gpio_config(&io_config);
+//
+//    setupRMT();
 
-
-    ESP_LOGI(TAG_RMT, "Initialize EN + DIR GPIO");
-    gpio_config_t io_config = {
-            .mode = GPIO_MODE_OUTPUT,
-            .intr_type = GPIO_INTR_DISABLE,
-            .pin_bit_mask = GPIO_OUTPUT_PIN_SEL
-    };
-    gpio_config(&io_config);
-
-    io_config.pin_bit_mask = GPIO_INPUT_PIN_SEL;
-    io_config.mode = GPIO_MODE_INPUT;
-    io_config.pull_up_en = 1;
-    gpio_config(&io_config);
-
-    io_config.pin_bit_mask = GPIO_OUTPUT_MUX_SEL;
-    io_config.intr_type = GPIO_INTR_DISABLE;
-    io_config.mode = GPIO_MODE_OUTPUT;
-    io_config.pull_down_en = 0;
-    io_config.pull_up_en = 0;
-    gpio_config(&io_config);
-
-    io_config.pin_bit_mask = SENSOR_ARRAY;
-    io_config.mode = GPIO_MODE_INPUT;
-
-    gpio_config(&io_config);
-
-    setupRMT();
+//    parseCommands(0b010010111);
+    //110000000
 }
