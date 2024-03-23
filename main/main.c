@@ -25,9 +25,8 @@
 #define SENSOR_ARRAY GPIO_NUM_17
 // #define GPIO_INPUT_PIN_SEL  (1ULL<<SENSOR_ARRAY)
 
-// #define USE_WIFI
-  #define USE_BLUETOOTH
-//#define USE_WIFI
+#define USE_WIFI
+//#define USE_BLUETOOTH
 
 #ifdef USE_WIFI
 
@@ -80,10 +79,10 @@ const static uint32_t uniform_speed_hz = 5000;
 #define MAX_PARAM_LENGTH 10
 
 typedef enum {
-    N = 0,
-    S = 1,
-    W = 2,
-    E = 3,
+    NO = 0,
+    SO = 1,
+    WE = 2,
+    EA = 3,
 
     NE = 4,
     NW = 5,
@@ -91,10 +90,10 @@ typedef enum {
     SE = 7
 } Direction;
 
-static const int dirConfigs[8][4] = {{1, 1, 1, 1},   // N
-                                     {0, 0, 1, 1},   // S
-                                     {0, 1, 1, 1},   // W
-                                     {1, 0, 1, 1},   // E
+static const int dirConfigs[8][4] = {{1, 1, 1, 1},   // NO
+                                     {0, 0, 1, 1},   // SO
+                                     {0, 1, 1, 1},   // WE
+                                     {1, 0, 1, 1},   // EA
                                      {1, 0, 1, 0},   // NE
                                      {0, 1, 0, 1},   // NW
                                      {0, 0, 1, 0},   // SW
@@ -172,14 +171,14 @@ rmt_channel_handle_t motor_chan = NULL;
 rmt_encoder_handle_t uniform_motor_encoder = NULL;
 
 Direction stringToEnum(const char *dirAsString) {
-    if (strcmp(dirAsString, "N") == 0) {
-        return N;
-    } else if (strcmp(dirAsString, "S") == 0) {
-        return S;
-    } else if (strcmp(dirAsString, "W") == 0) {
-        return W;
-    } else if (strcmp(dirAsString, "E") == 0) {
-        return E;
+    if (strcmp(dirAsString, "NO") == 0) {
+        return NO;
+    } else if (strcmp(dirAsString, "SO") == 0) {
+        return SO;
+    } else if (strcmp(dirAsString, "WE") == 0) {
+        return WE;
+    } else if (strcmp(dirAsString, "EA") == 0) {
+        return EA;
     } else if (strcmp(dirAsString, "NE") == 0) {
         return NE;
     } else if (strcmp(dirAsString, "NW") == 0) {
@@ -237,28 +236,28 @@ void toggleMotor(bool switchOn, int motor) {
 
 void toggleMagnet(char *switchOn) {
 
-    if (strcmp(switchOn, "1") == 0) {
+    if (strcmp(switchOn, "01") == 0) {
         gpio_set_level(EM_TOGGLE, 1);
-    } else if (strcmp(switchOn, "0") == 0) {
+    } else if (strcmp(switchOn, "00") == 0) {
         gpio_set_level(EM_TOGGLE, 0);
     }
 }
 
 bool canMoveto(Direction dir) {
     switch (dir) {
-        case N:
+        case NO:
             return true;
-        case S:
+        case SO:
             if (!isPressed(EMERGENCY_INNER)) {
                 return true;
             } else
                 return false;
-        case W:
+        case WE:
             if (!isPressed(EMERGENCY_OUTER)) {
                 return true;
             } else
                 return false;
-        case E:
+        case EA:
             return true;
         case NE:
             return true;
@@ -325,12 +324,12 @@ int move(Direction dir, double numHalfTiles) {
 
 void getHome() {
     if (!isPressed(EMERGENCY_INNER) || !isPressed(EMERGENCY_OUTER)) {
-        printf("IN GETHOME\n");
+        printf("IN GET HOME\n");
         while (!isPressed(EMERGENCY_INNER)) {
-            move(S, .1);
+            move(SO, .25);
         }
         while (!isPressed(EMERGENCY_OUTER)) {
-            move(W, .1);
+            move(WE, .25);
         }
     }
     printf("HOME");
@@ -358,52 +357,6 @@ void setupRMT() {
 
     ESP_LOGI(TAG_RMT, "Enable RMT channel");
     ESP_ERROR_CHECK(rmt_enable(motor_chan));
-}
-
-int parseCommands(uint16_t command) {
-
-
-    uint8_t action = (command >> 7) & 0b11;
-    uint8_t param1 = (command >> 4) & 0b111;
-    uint8_t param2 = (command & 0b1111);
-
-    printf("command= %x\n", command);
-
-    printf("action= %x\n", action);
-    printf("param1= %x\n", param1);
-    printf("param2= %x\n", param2);
-
-    switch (action) {
-        case 0xC0:
-            printf("HOME\n");
-            getHome();
-            return 0;
-        case 0x80:
-            printf("MAGNET\n");
-            if (param1 > 0) {
-                toggleMagnet("1");
-            } else {
-                toggleMagnet("0");
-            }
-            return 0;
-        case 0x40:
-            printf("MOVE\n");
-            move(param1, param2);
-            return 0;
-        case 0x00:
-            printf("NOP\n");
-            return 1;
-    }
-    return 0;
-}
-
-void parseScript(uintmax_t script) {
-    uint64_t startConfigs = (script >> 33);
-    uintmax_t commands = (script << 33);
-    int commandCount = 0;
-    while (parseCommands(commands >> commandCount * 9) == 0) {
-        commandCount++;
-    }
 }
 
 uint64_t readSensors() {
@@ -443,71 +396,106 @@ uint64_t readSensors() {
     }
 }
 
-int executeScript(uint8_t *script, uint16_t length) {
-    for (int i = 0; i < length; ++i) {
-        printf("%x\n", script[i]);
-    }
-    uint8_t player = script[0];
-    uint16_t timeLocal =  ((uint16_t) script[1]) << 8 | script[2];
-    uint16_t timeRemote = ((uint16_t) script[3]) << 8 | script[4] ;
-    printf("%x %x %x", player, timeLocal, timeRemote);
-    uint16_t command;
-    uint8_t i = 5;
-    do {
-        command = ((uint16_t) script[i]) << 8 | script[i + 1];
-        i++;
-        printf("%x\n", command);
-    } while (!command);
+void parseTextCommands(const char command[], char params[MAX_PARAMS][MAX_PARAM_LENGTH], int *numParams) {
+    *numParams = 0;
+    const char delimiter[] = " ";
+    char *rest, *token;
 
-    return 1;
-    return 0;
+    rest = strdup(command);
+
+    if (rest == NULL) {
+        perror("Memory allocation error");
+        exit(EXIT_FAILURE);
+    }
+
+    char *rest_copy = rest;
+
+    while ((token = strtok_r(rest, delimiter, &rest)) != NULL && *numParams < MAX_PARAMS) {
+        strcpy(params[*numParams], token);
+        (*numParams)++;
+    }
+
+    free(rest_copy);
+}
+
+void parseTextScript(const char script[], char commands[MAX_COMMANDS][MAX_PARAMS][MAX_PARAM_LENGTH], int *numCommands,
+                     int *numParams) {
+    *numCommands = 0;
+    const char commandDelimiter[] = "-";
+
+    char *rest, *command;
+
+    rest = strdup(script);
+
+    if (rest == NULL) {
+        perror("Memory allocation error");
+        exit(EXIT_FAILURE);
+    }
+
+    char *rest_copy = rest;
+    while ((command = strtok_r(rest, commandDelimiter, &rest)) != NULL && *numCommands < MAX_COMMANDS) {
+        parseTextCommands(command, commands[*numCommands], &numParams[*numCommands]);
+        (*numCommands)++;
+    }
+
+    free(rest_copy);
+}
+
+int executeTextScript(char *script) {
+
+
     int numCommands = 0;
     int numParams[MAX_COMMANDS] = {0};
     char commands[MAX_COMMANDS][MAX_PARAMS][MAX_PARAM_LENGTH];
 
-//    parseScript(script, commands, &numCommands, numParams);
+    parseTextScript(script, commands, &numCommands, numParams);
 
-    // Output the parsed commands and parameters
+
     for (int i = 0; i < numCommands; ++i) {
-        if (strcmp(commands[i][0], "MOVE") == 0) {
+
+        if (strcmp(commands[i][0], "MV") == 0) {
             printf("MOVE DETECTED\n");
             move(stringToEnum(commands[i][1]), atoi(commands[i][2]));
 
-        } else if (strcmp(commands[i][0], "HOME") == 0) {
+        } else if (strcmp(commands[i][0], "HM") == 0) {
             printf("HOME DETECTED\n");
             getHome();
 
-        } else if (strcmp(commands[i][0], "MAGNET") == 0) {
+        } else if (strcmp(commands[i][0], "MG") == 0) {
             printf("MAGNET DETECTED\n");
 
             toggleMagnet((commands[i][1]));
-        } else if (strcmp(commands[i][0], "READ") == 0) {
-#ifdef USE_BLUETOOTH
+        } else if (strcmp(commands[i][0], "RD") == 0) {
+
+#if defined(USE_BLUETOOTH)
             notifyBoard(readSensors());
             printf("READ DETECTED\n");
 #endif
         }
     }
 
-    // Output the parsed commands and parameters
     for (int i = 0; i < numCommands; ++i) {
-        printf("{");
         for (int j = 0; j < numParams[i]; ++j) {
+            printf("{");
             printf("%s", commands[i][j]);
             if (j < numParams[i] - 1) {
                 printf(", ");
             }
+            printf("}\n");
         }
+
     }
     printf("}\n");
+
 
     return 0;
 }
 
+
 void app_main(void) {
     disableMotor1();
     disableMotor2();
-//
+
 #ifdef USE_WIFI
     initNvs();
     setupWifi();
@@ -516,33 +504,31 @@ void app_main(void) {
     startBT();
 
 #endif
-//
-//    ESP_LOGI(TAG_RMT, "Initialize EN + DIR GPIO");
-//    gpio_config_t io_config = {
-//        .mode = GPIO_MODE_OUTPUT,
-//        .intr_type = GPIO_INTR_DISABLE,
-//        .pin_bit_mask = GPIO_OUTPUT_PIN_SEL};
-//    gpio_config(&io_config);
-//
-//    io_config.pin_bit_mask = GPIO_INPUT_PIN_SEL;
-//    io_config.mode = GPIO_MODE_INPUT;
-//    io_config.pull_up_en = 1;
-//    gpio_config(&io_config);
-//
-//    io_config.pin_bit_mask = GPIO_OUTPUT_MUX_SEL;
-//    io_config.intr_type = GPIO_INTR_DISABLE;
-//    io_config.mode = GPIO_MODE_OUTPUT;
-//    io_config.pull_down_en = 0;
-//    io_config.pull_up_en = 0;
-//    gpio_config(&io_config);
-//
-//    io_config.pin_bit_mask = SENSOR_ARRAY;
-//    io_config.mode = GPIO_MODE_INPUT;
-//
-//    gpio_config(&io_config);
-//
-//    setupRMT();
 
-//    parseCommands(0b010010111);
-    //110000000
+    ESP_LOGI(TAG_RMT, "Initialize EN + DIR GPIO");
+    gpio_config_t io_config = {
+            .mode = GPIO_MODE_OUTPUT,
+            .intr_type = GPIO_INTR_DISABLE,
+            .pin_bit_mask = GPIO_OUTPUT_PIN_SEL};
+    gpio_config(&io_config);
+
+    io_config.pin_bit_mask = GPIO_INPUT_PIN_SEL;
+    io_config.mode = GPIO_MODE_INPUT;
+    io_config.pull_up_en = 1;
+    gpio_config(&io_config);
+
+    io_config.pin_bit_mask = GPIO_OUTPUT_MUX_SEL;
+    io_config.intr_type = GPIO_INTR_DISABLE;
+    io_config.mode = GPIO_MODE_OUTPUT;
+    io_config.pull_down_en = 0;
+    io_config.pull_up_en = 0;
+    gpio_config(&io_config);
+
+    io_config.pin_bit_mask = SENSOR_ARRAY;
+    io_config.mode = GPIO_MODE_INPUT;
+
+    gpio_config(&io_config);
+
+    setupRMT();
+
 }
