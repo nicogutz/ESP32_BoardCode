@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Unlicense OR CC0-1.0
  */
 
+#include <esp_gattc_api.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
@@ -137,7 +138,7 @@ struct gatts_profile_inst {
     esp_bt_uuid_t descr_uuid;
 };
 
-int executeScript(uint8_t *script, uint16_t length);
+int executeTextScript(uint8_t *script, uint16_t length);
 
 
 static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
@@ -365,7 +366,7 @@ gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, 
                         esp_log_buffer_hex(GATTS_TABLE_TAG, param->write.value, param->write.len);
 
                 if (chess_handle_table[IDX_CHAR_VAL_MOTOR] == param->write.handle) {
-                    executeScript(param->write.value, param->write.len - 0);
+                    executeTextScript(param->write.value, param->write.len - 0);
                 } else if (chess_handle_table[IDX_CHAR_CFG_BOARD] == param->write.handle && param->write.len == 2) {
                     uint16_t descr_value = param->write.value[1] << 8 | param->write.value[0];
                     if (descr_value == 0x0001) {
@@ -426,6 +427,15 @@ gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, 
                 esp_ble_gatts_start_service(chess_handle_table[IDX_SVC]);
             }
             break;
+        }
+        case ESP_GATTS_MTU_EVT: {
+            uint16_t negotiated_mtu = param->mtu.mtu;
+
+            // Update the MTU size if it's smaller than the maximum supported MTU
+            if (negotiated_mtu < 518) {
+                esp_ble_gatt_set_local_mtu(negotiated_mtu);
+                ESP_LOGI("MTU", "MTU size increased to %d", negotiated_mtu);
+            }
         }
         default:
             break;
@@ -530,7 +540,9 @@ void startBT() {
         return;
     }
 
-    esp_err_t local_mtu_ret = esp_ble_gatt_set_local_mtu(500);
+
+    esp_err_t local_mtu_ret = esp_ble_gatt_set_local_mtu(0xFFFF);
+
     if (local_mtu_ret) {
         ESP_LOGE(GATTS_TABLE_TAG, "set local  MTU failed, error code = %x", local_mtu_ret);
     }
