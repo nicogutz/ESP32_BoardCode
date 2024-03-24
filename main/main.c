@@ -170,24 +170,28 @@ const uint8_t positions[] = {
 rmt_channel_handle_t motor_chan = NULL;
 rmt_encoder_handle_t uniform_motor_encoder = NULL;
 
-Direction stringToEnum(const char *dirAsString) {
-    if (strcmp(dirAsString, "NO") == 0) {
+Direction extractDirection(const char *moveCommand) {
+    if (strncmp(moveCommand + 2, "NO", 2) == 0) {
         return NO;
-    } else if (strcmp(dirAsString, "SO") == 0) {
+    } else if (strncmp(moveCommand + 2, "SO", 2) == 0) {
         return SO;
-    } else if (strcmp(dirAsString, "WE") == 0) {
+    } else if (strncmp(moveCommand + 2, "WE", 2) == 0) {
         return WE;
-    } else if (strcmp(dirAsString, "EA") == 0) {
+    } else if (strncmp(moveCommand + 2, "EA", 2) == 0) {
         return EA;
-    } else if (strcmp(dirAsString, "NE") == 0) {
+    } else if (strncmp(moveCommand + 2, "NE", 2) == 0) {
         return NE;
-    } else if (strcmp(dirAsString, "NW") == 0) {
+    } else if (strncmp(moveCommand + 2, "NW", 2) == 0) {
         return NW;
-    } else if (strcmp(dirAsString, "SW") == 0) {
+    } else if (strncmp(moveCommand + 2, "SW", 2) == 0) {
         return SW;
     } else {
         return SE;
     }
+}
+
+int extractDistance(const char *moveCommand) {
+    return atoi(moveCommand + 4);
 }
 
 void disableMotor1() {
@@ -234,11 +238,11 @@ void toggleMotor(bool switchOn, int motor) {
     }
 }
 
-void toggleMagnet(char *switchOn) {
+void executeToggleMagnet(char *switchOn) {
 
-    if (strcmp(switchOn, "01") == 0) {
+    if (strcmp(switchOn, "1") == 0) {
         gpio_set_level(EM_TOGGLE, 1);
-    } else if (strcmp(switchOn, "00") == 0) {
+    } else if (strcmp(switchOn, "0") == 0) {
         gpio_set_level(EM_TOGGLE, 0);
     }
 }
@@ -280,7 +284,7 @@ bool canMoveto(Direction dir) {
     return false;
 }
 
-int move(Direction dir, double numHalfTiles) {
+int executeMove(Direction dir, double numHalfTiles) {
     double tileDistance;
     if (dir > 3) {
         tileDistance = ((DIAGONAL_TILE_IN_STEPS / 2) * numHalfTiles * 0.75);
@@ -322,14 +326,14 @@ int move(Direction dir, double numHalfTiles) {
     return tileDistance;
 }
 
-void getHome() {
+void executeHome() {
     if (!isPressed(EMERGENCY_INNER) || !isPressed(EMERGENCY_OUTER)) {
         printf("IN GET HOME\n");
         while (!isPressed(EMERGENCY_INNER)) {
-            move(SO, .25);
+            executeMove(SO, .25);
         }
         while (!isPressed(EMERGENCY_OUTER)) {
-            move(WE, .25);
+            executeMove(WE, .25);
         }
     }
     printf("HOME");
@@ -396,33 +400,31 @@ uint64_t readSensors() {
     }
 }
 
-void parseTextCommands(const char command[], char params[MAX_PARAMS][MAX_PARAM_LENGTH], int *numParams) {
-    *numParams = 0;
-    const char delimiter[] = " ";
-    char *rest, *token;
+int executeTextCommand(char *command) {
 
-    rest = strdup(command);
-
-    if (rest == NULL) {
-        perror("Memory allocation error");
-        exit(EXIT_FAILURE);
+    if (strncmp(command, "MV", 2) == 0) {
+        //"MVNE7"
+        printf("Executing move\n");
+        executeMove(extractDirection(command), extractDistance(command));
+    } else if (strncmp(command, "HM", 2) == 0) {
+        // "HM"
+        printf("Executing home\n");
+        executeHome();
+    } else if (strncmp(command, "MG", 2) == 0) {
+        // "MG1"
+        printf("Executing toggleMagnet\n");
+        executeToggleMagnet(command + 2);
+    } else if (strncmp(command, "RD", 2) == 0) {
+#if defined(USE_BLUETOOTH)
+        notifyBoard(readSensors());
+        printf("READ DETECTED\n");
+#endif
     }
-
-    char *rest_copy = rest;
-
-    while ((token = strtok_r(rest, delimiter, &rest)) != NULL && *numParams < MAX_PARAMS) {
-        strcpy(params[*numParams], token);
-        (*numParams)++;
-    }
-
-    free(rest_copy);
+    return 0;
 }
 
-void parseTextScript(const char script[], char commands[MAX_COMMANDS][MAX_PARAMS][MAX_PARAM_LENGTH], int *numCommands,
-                     int *numParams) {
-    *numCommands = 0;
+void executeTextScript(const char script[]) {
     const char commandDelimiter[] = "-";
-
     char *rest, *command;
 
     rest = strdup(script);
@@ -432,63 +434,13 @@ void parseTextScript(const char script[], char commands[MAX_COMMANDS][MAX_PARAMS
         exit(EXIT_FAILURE);
     }
 
+    printf("Executing script\n");
     char *rest_copy = rest;
-    while ((command = strtok_r(rest, commandDelimiter, &rest)) != NULL && *numCommands < MAX_COMMANDS) {
-        parseTextCommands(command, commands[*numCommands], &numParams[*numCommands]);
-        (*numCommands)++;
+    while ((command = strtok_r(rest, commandDelimiter, &rest)) != NULL) {
+        executeTextCommand(command);
     }
 
     free(rest_copy);
-}
-
-int executeTextScript(char *script) {
-
-
-    int numCommands = 0;
-    int numParams[MAX_COMMANDS] = {0};
-    char commands[MAX_COMMANDS][MAX_PARAMS][MAX_PARAM_LENGTH];
-
-    parseTextScript(script, commands, &numCommands, numParams);
-
-
-    for (int i = 0; i < numCommands; ++i) {
-
-        if (strcmp(commands[i][0], "MV") == 0) {
-            printf("MOVE DETECTED\n");
-            move(stringToEnum(commands[i][1]), atoi(commands[i][2]));
-
-        } else if (strcmp(commands[i][0], "HM") == 0) {
-            printf("HOME DETECTED\n");
-            getHome();
-
-        } else if (strcmp(commands[i][0], "MG") == 0) {
-            printf("MAGNET DETECTED\n");
-
-            toggleMagnet((commands[i][1]));
-        } else if (strcmp(commands[i][0], "RD") == 0) {
-
-#if defined(USE_BLUETOOTH)
-            notifyBoard(readSensors());
-            printf("READ DETECTED\n");
-#endif
-        }
-    }
-
-    for (int i = 0; i < numCommands; ++i) {
-        for (int j = 0; j < numParams[i]; ++j) {
-            printf("{");
-            printf("%s", commands[i][j]);
-            if (j < numParams[i] - 1) {
-                printf(", ");
-            }
-            printf("}\n");
-        }
-
-    }
-    printf("}\n");
-
-
-    return 0;
 }
 
 
