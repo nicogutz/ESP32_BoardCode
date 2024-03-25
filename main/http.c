@@ -14,7 +14,7 @@ esp_err_t getStatusHandler(httpd_req_t *req)
     return ESP_OK;
 }
 
-int executeScript(uint8_t *script, uint16_t lenght);
+int executeTextScript(char *script);
 
 esp_err_t postExecuteHandler(httpd_req_t *req)
 {
@@ -29,8 +29,7 @@ esp_err_t postExecuteHandler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-//    int result = executeScript(content, 100);
-//    printf("%d", result);
+    executeTextScript(content);
 
     const char resp[] = "URI POST Response";
     httpd_resp_send(req, resp, HTTPD_RESP_USE_STRLEN);

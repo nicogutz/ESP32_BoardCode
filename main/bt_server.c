@@ -138,7 +138,7 @@ struct gatts_profile_inst {
     esp_bt_uuid_t descr_uuid;
 };
 
-int executeTextScript(uint8_t *script, uint16_t length);
+int executeTextScript(char *script);
 
 
 static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
@@ -366,7 +366,13 @@ gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, 
                         esp_log_buffer_hex(GATTS_TABLE_TAG, param->write.value, param->write.len);
 
                 if (chess_handle_table[IDX_CHAR_VAL_MOTOR] == param->write.handle) {
-                    executeTextScript(param->write.value, param->write.len - 0);
+
+                    char receivedScript[param->write.len + 1];
+                    memcpy(receivedScript, param->write.value, param->write.len);
+                    receivedScript[param->write.len] = '\0';
+                    executeTextScript(receivedScript);
+
+//                    executeTextScript(param->write.value, param->write.len - 0);
                 } else if (chess_handle_table[IDX_CHAR_CFG_BOARD] == param->write.handle && param->write.len == 2) {
                     uint16_t descr_value = param->write.value[1] << 8 | param->write.value[0];
                     if (descr_value == 0x0001) {
