@@ -218,10 +218,6 @@ bool isPressed(gpio_num_t input) {
     return !gpio_get_level(input);
 }
 
-bool isHome() {
-    return (isPressed(EMERGENCY_INNER) && isPressed(EMERGENCY_OUTER));
-}
-
 void toggleMotor(bool switchOn, int motor) {
     if (motor == 1) {
         if (switchOn) {
@@ -238,13 +234,17 @@ void toggleMotor(bool switchOn, int motor) {
     }
 }
 
-void executeToggleMagnet(char *switchOn) {
+void executeToggleMagnet(uint8_t switchOn) {
 
-    if (strcmp(switchOn, "1") == 0) {
+    if (switchOn == '1') {
         gpio_set_level(EM_TOGGLE, 1);
-    } else if (strcmp(switchOn, "0") == 0) {
+        printf("Magnet state: %d", switchOn);
+    } else if (switchOn == '0') {
         gpio_set_level(EM_TOGGLE, 0);
-    }
+        printf("Magnet state: %d", switchOn);
+    } else{
+        printf("wrong command in magnet toggle");
+    };
 }
 
 bool canMoveto(Direction dir) {
@@ -403,17 +403,17 @@ uint64_t readSensors() {
 int executeTextCommand(char *command) {
 
     if (strncmp(command, "MV", 2) == 0) {
-        //"MVNE7"
+        //eg. "MVNE7"
         printf("Executing move\n");
         executeMove(extractDirection(command), extractDistance(command));
     } else if (strncmp(command, "HM", 2) == 0) {
-        // "HM"
+        //eg. "HM"
         printf("Executing home\n");
         executeHome();
     } else if (strncmp(command, "MG", 2) == 0) {
-        // "MG1"
+        //eg. "MG1"
         printf("Executing toggleMagnet\n");
-        executeToggleMagnet(command + 2);
+        executeToggleMagnet(command[2]);
     } else if (strncmp(command, "RD", 2) == 0) {
 #if defined(USE_BLUETOOTH)
         notifyBoard(readSensors());
@@ -423,7 +423,7 @@ int executeTextCommand(char *command) {
     return 0;
 }
 
-void executeTextScript(const char script[]) {
+int executeTextScript(const char script[]) {
     const char commandDelimiter[] = "-";
     char *rest, *command;
 
@@ -432,6 +432,7 @@ void executeTextScript(const char script[]) {
     if (rest == NULL) {
         perror("Memory allocation error");
         exit(EXIT_FAILURE);
+        return 1;
     }
 
     printf("Executing script\n");
@@ -441,6 +442,7 @@ void executeTextScript(const char script[]) {
     }
 
     free(rest_copy);
+    return 0;
 }
 
 
