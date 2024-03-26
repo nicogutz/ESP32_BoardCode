@@ -67,13 +67,13 @@
 #define GPIO_INPUT_PIN_SEL \
     ((1ULL << EMERGENCY_OUTER) | (1ULL << EMERGENCY_INNER))
 
-#define ORTHOGONAL_TILE_IN_STEPS 5626
+#define ORTHOGONAL_TILE_IN_STEPS 5860
 #define DIAGONAL_TILE_IN_STEPS 15913
 
-#define STEP_MOTOR_RESOLUTION_HZ 1000000  // 1MHz resolution
+#define STEP_MOTOR_RESOLUTION_HZ 2000000  // 1MHz resolution
 #define TAG_RMT "RMT"
 
-const static uint32_t uniform_speed_hz = 5000;
+const static uint32_t uniform_speed_hz = 20000;
 
 #define MAX_COMMANDS 10
 #define MOVE_HEADER_LENGTH 32
@@ -237,14 +237,15 @@ void toggleMotor(bool switchOn, int motor) {
 }
 
 void executeToggleMagnet(uint8_t switchOn) {
-
     if (switchOn == '1') {
         gpio_set_level(EM_TOGGLE, 1);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
         printf("Magnet state: %d", switchOn);
     } else if (switchOn == '0') {
         gpio_set_level(EM_TOGGLE, 0);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
         printf("Magnet state: %d", switchOn);
-    } else{
+    } else {
         printf("wrong command in magnet toggle");
     };
 }
@@ -308,7 +309,7 @@ int executeMove(Direction dir, double numHalfTiles) {
 
     if (canMoveto(dir)) {
         rmt_transmit_config_t tx_config = {
-                .loop_count = tileDistance,
+            .loop_count = tileDistance,
         };
 
         // uniform phase
@@ -383,7 +384,7 @@ uint64_t readSensors() {
     for (int j = 0; j < 2; ++j) {
         for (int i = 0; i < 64; i++) {
             if (!gpio_get_level(SENSOR_ARRAY)) {
-                board[j] = board[j] | ((uint64_t) !gpio_get_level(SENSOR_ARRAY) << (positions[i] - 1));
+                board[j] = board[j] | ((uint64_t)!gpio_get_level(SENSOR_ARRAY) << (positions[i] - 1));
                 vTaskDelay(150 / portTICK_PERIOD_MS);
             }
             gpio_set_level(MUX_CLK, 0);
@@ -402,26 +403,17 @@ uint64_t readSensors() {
     }
 }
 
-uint8_t extractCurrentPlayer(uint8_t* command){
-    return command[0];
-}
-
-//uint32_t extractTimestamps(uint8_t* command){
-//    return command1;
-//}
-
 int executeTextCommand(char *command) {
-
     if (strncmp(command, "MV", 2) == 0) {
-        //eg. "MVNE7"
+        // eg. "MVNE7"
         printf("Executing move\n");
         executeMove(extractDirection(command), extractDistance(command));
     } else if (strncmp(command, "HM", 2) == 0) {
-        //eg. "HM"
+        // eg. "HM"
         printf("Executing home\n");
         executeHome();
     } else if (strncmp(command, "MG", 2) == 0) {
-        //eg. "MG1"
+        // eg. "MG1"
         printf("Executing toggleMagnet\n");
         executeToggleMagnet(command[2]);
     }else if(strncmp(command, "TM", 2) == 0){
@@ -437,7 +429,7 @@ int executeTextCommand(char *command) {
 }
 
 int executeTextScript(const char script[]) {
-    const char commandDelimiter[] = "-";
+    const char commandDelimiter[] = ",";
     char *rest, *command;
 
     rest = strdup(script);
@@ -458,11 +450,9 @@ int executeTextScript(const char script[]) {
     return 0;
 }
 
-
 void app_main(void) {
     disableMotor1();
     disableMotor2();
-
 
 #ifdef USE_WIFI
     initNvs();
