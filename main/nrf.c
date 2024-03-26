@@ -38,7 +38,7 @@ bool initialConnection(void) {
                 return true;
             }
         };
-        vTaskDelay(10);
+        vTaskDelay(10 / portTICK_PERIOD_MS);
     }
     vTaskDelay(500 / portTICK_PERIOD_MS);
     return false;

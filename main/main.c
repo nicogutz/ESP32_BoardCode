@@ -418,13 +418,8 @@ int executeTextCommand(char *command) {
         executeToggleMagnet(command[2]);
     }else if(strncmp(command, "TM", 2) == 0){
         // eg. TM[R/L][32byte time]
-//        nrf_send(command + 2);
-    } else if (strncmp(command, "RD", 2) == 0) {
-#if defined(USE_BLUETOOTH)
-        notifyBoard(readSensors());
-        printf("READ DETECTED\n");
-#endif
-    }
+       nrf_send(command + 2);
+    } 
     return 0;
 }
 
@@ -488,6 +483,6 @@ void app_main(void) {
     gpio_config(&io_config);
 
     setupRMT();
-
+    executeHome();
     nrf_init();
 }
