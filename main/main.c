@@ -17,6 +17,7 @@
 #include "math.h"
 #include "rom/gpio.h"
 #include "stepper_motor_encoder.h"
+#include "nrf.h"
 
 #define MUX_RST GPIO_NUM_8
 #define MUX_CLK GPIO_NUM_18
@@ -25,13 +26,14 @@
 #define SENSOR_ARRAY GPIO_NUM_17
 // #define GPIO_INPUT_PIN_SEL  (1ULL<<SENSOR_ARRAY)
 
-#define USE_WIFI
-//#define USE_BLUETOOTH
+//#define USE_WIFI
+#define USE_BLUETOOTH
 
 #ifdef USE_WIFI
 
 #include "http.h"
 #include "wifi.h"
+#include "mirf.h"
 
 #elif defined(USE_BLUETOOTH)
 
@@ -400,6 +402,14 @@ uint64_t readSensors() {
     }
 }
 
+uint8_t extractCurrentPlayer(uint8_t* command){
+    return command[0];
+}
+
+//uint32_t extractTimestamps(uint8_t* command){
+//    return command1;
+//}
+
 int executeTextCommand(char *command) {
 
     if (strncmp(command, "MV", 2) == 0) {
@@ -414,6 +424,9 @@ int executeTextCommand(char *command) {
         //eg. "MG1"
         printf("Executing toggleMagnet\n");
         executeToggleMagnet(command[2]);
+    }else if(strncmp(command, "TM", 2) == 0){
+        // eg. TM[R/L][32byte time]
+//        nrf_send(command + 2);
     } else if (strncmp(command, "RD", 2) == 0) {
 #if defined(USE_BLUETOOTH)
         notifyBoard(readSensors());
@@ -450,6 +463,7 @@ void app_main(void) {
     disableMotor1();
     disableMotor2();
 
+
 #ifdef USE_WIFI
     initNvs();
     setupWifi();
@@ -485,4 +499,5 @@ void app_main(void) {
 
     setupRMT();
 
+    nrf_init();
 }
