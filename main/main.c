@@ -26,7 +26,7 @@
 // #define GPIO_INPUT_PIN_SEL  (1ULL<<SENSOR_ARRAY)
 
 #define USE_WIFI
-//#define USE_BLUETOOTH
+// #define USE_BLUETOOTH
 
 #ifdef USE_WIFI
 
@@ -65,13 +65,13 @@
 #define GPIO_INPUT_PIN_SEL \
     ((1ULL << EMERGENCY_OUTER) | (1ULL << EMERGENCY_INNER))
 
-#define ORTHOGONAL_TILE_IN_STEPS 5626
+#define ORTHOGONAL_TILE_IN_STEPS 5860
 #define DIAGONAL_TILE_IN_STEPS 15913
 
-#define STEP_MOTOR_RESOLUTION_HZ 1000000  // 1MHz resolution
+#define STEP_MOTOR_RESOLUTION_HZ 2000000  // 1MHz resolution
 #define TAG_RMT "RMT"
 
-const static uint32_t uniform_speed_hz = 5000;
+const static uint32_t uniform_speed_hz = 20000;
 
 #define MAX_COMMANDS 10
 #define MOVE_HEADER_LENGTH 32
@@ -100,70 +100,70 @@ static const int dirConfigs[8][4] = {{1, 1, 1, 1},   // NO
                                      {0, 0, 0, 1}};  // SE
 
 const uint8_t positions[] = {
-        49,
-        51,
-        55,
-        53,
-        57,
-        59,
-        61,
-        63,
-        64,
-        62,
-        60,
-        58,
-        56,
-        54,
-        52,
-        50,
-        33,
-        35,
-        37,
-        39,
-        41,
-        43,
-        45,
-        47,
-        48,
-        46,
-        44,
-        42,
-        40,
-        38,
-        36,
-        34,
-        17,
-        19,
-        21,
-        23,
-        25,
-        27,
-        29,
-        31,
-        32,
-        30,
-        28,
-        26,
-        24,
-        22,
-        20,
-        18,
-        1,
-        3,
-        5,
-        7,
-        9,
-        11,
-        13,
-        15,
-        16,
-        14,
-        12,
-        10,
-        8,
-        6,
-        4,
-        2
+    49,
+    51,
+    55,
+    53,
+    57,
+    59,
+    61,
+    63,
+    64,
+    62,
+    60,
+    58,
+    56,
+    54,
+    52,
+    50,
+    33,
+    35,
+    37,
+    39,
+    41,
+    43,
+    45,
+    47,
+    48,
+    46,
+    44,
+    42,
+    40,
+    38,
+    36,
+    34,
+    17,
+    19,
+    21,
+    23,
+    25,
+    27,
+    29,
+    31,
+    32,
+    30,
+    28,
+    26,
+    24,
+    22,
+    20,
+    18,
+    1,
+    3,
+    5,
+    7,
+    9,
+    11,
+    13,
+    15,
+    16,
+    14,
+    12,
+    10,
+    8,
+    6,
+    4,
+    2
 
 };
 
@@ -235,14 +235,15 @@ void toggleMotor(bool switchOn, int motor) {
 }
 
 void executeToggleMagnet(uint8_t switchOn) {
-
     if (switchOn == '1') {
         gpio_set_level(EM_TOGGLE, 1);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
         printf("Magnet state: %d", switchOn);
     } else if (switchOn == '0') {
         gpio_set_level(EM_TOGGLE, 0);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
         printf("Magnet state: %d", switchOn);
-    } else{
+    } else {
         printf("wrong command in magnet toggle");
     };
 }
@@ -306,7 +307,7 @@ int executeMove(Direction dir, double numHalfTiles) {
 
     if (canMoveto(dir)) {
         rmt_transmit_config_t tx_config = {
-                .loop_count = tileDistance,
+            .loop_count = tileDistance,
         };
 
         // uniform phase
@@ -342,11 +343,11 @@ void executeHome() {
 void setupRMT() {
     ESP_LOGI(TAG_RMT, "Create RMT TX channel");
     rmt_tx_channel_config_t tx_chan_config = {
-            .clk_src = RMT_CLK_SRC_DEFAULT,  // select clock source
-            .gpio_num = STEP_MOTOR_GPIO_STEP1,
-            .mem_block_symbols = 64,
-            .resolution_hz = STEP_MOTOR_RESOLUTION_HZ,
-            .trans_queue_depth = 10,  // set the number of transactions that can be pending in the background
+        .clk_src = RMT_CLK_SRC_DEFAULT,  // select clock source
+        .gpio_num = STEP_MOTOR_GPIO_STEP1,
+        .mem_block_symbols = 64,
+        .resolution_hz = STEP_MOTOR_RESOLUTION_HZ,
+        .trans_queue_depth = 10,  // set the number of transactions that can be pending in the background
     };
     ESP_ERROR_CHECK(rmt_new_tx_channel(&tx_chan_config, &motor_chan));
 
@@ -354,7 +355,7 @@ void setupRMT() {
     gpio_matrix_out(STEP_MOTOR_GPIO_STEP2, RMT_SIG_OUT0_IDX, false, false);
 
     stepper_motor_uniform_encoder_config_t uniform_encoder_config = {
-            .resolution = STEP_MOTOR_RESOLUTION_HZ,
+        .resolution = STEP_MOTOR_RESOLUTION_HZ,
     };
 
     ESP_ERROR_CHECK(rmt_new_stepper_motor_uniform_encoder(&uniform_encoder_config, &uniform_motor_encoder));
@@ -381,7 +382,7 @@ uint64_t readSensors() {
     for (int j = 0; j < 2; ++j) {
         for (int i = 0; i < 64; i++) {
             if (!gpio_get_level(SENSOR_ARRAY)) {
-                board[j] = board[j] | ((uint64_t) !gpio_get_level(SENSOR_ARRAY) << (positions[i] - 1));
+                board[j] = board[j] | ((uint64_t)!gpio_get_level(SENSOR_ARRAY) << (positions[i] - 1));
                 vTaskDelay(150 / portTICK_PERIOD_MS);
             }
             gpio_set_level(MUX_CLK, 0);
@@ -401,17 +402,16 @@ uint64_t readSensors() {
 }
 
 int executeTextCommand(char *command) {
-
     if (strncmp(command, "MV", 2) == 0) {
-        //eg. "MVNE7"
+        // eg. "MVNE7"
         printf("Executing move\n");
         executeMove(extractDirection(command), extractDistance(command));
     } else if (strncmp(command, "HM", 2) == 0) {
-        //eg. "HM"
+        // eg. "HM"
         printf("Executing home\n");
         executeHome();
     } else if (strncmp(command, "MG", 2) == 0) {
-        //eg. "MG1"
+        // eg. "MG1"
         printf("Executing toggleMagnet\n");
         executeToggleMagnet(command[2]);
     } else if (strncmp(command, "RD", 2) == 0) {
@@ -424,7 +424,7 @@ int executeTextCommand(char *command) {
 }
 
 int executeTextScript(const char script[]) {
-    const char commandDelimiter[] = "-";
+    const char commandDelimiter[] = ",";
     char *rest, *command;
 
     rest = strdup(script);
@@ -445,7 +445,6 @@ int executeTextScript(const char script[]) {
     return 0;
 }
 
-
 void app_main(void) {
     disableMotor1();
     disableMotor2();
@@ -461,9 +460,9 @@ void app_main(void) {
 
     ESP_LOGI(TAG_RMT, "Initialize EN + DIR GPIO");
     gpio_config_t io_config = {
-            .mode = GPIO_MODE_OUTPUT,
-            .intr_type = GPIO_INTR_DISABLE,
-            .pin_bit_mask = GPIO_OUTPUT_PIN_SEL};
+        .mode = GPIO_MODE_OUTPUT,
+        .intr_type = GPIO_INTR_DISABLE,
+        .pin_bit_mask = GPIO_OUTPUT_PIN_SEL};
     gpio_config(&io_config);
 
     io_config.pin_bit_mask = GPIO_INPUT_PIN_SEL;
@@ -484,5 +483,6 @@ void app_main(void) {
     gpio_config(&io_config);
 
     setupRMT();
-
+    executeHome();
+    executeTextScript("MG1,MVEA6,MVWE6,MG0,HM");
 }
