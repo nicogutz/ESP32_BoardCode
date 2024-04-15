@@ -73,7 +73,7 @@
 #define STEP_MOTOR_RESOLUTION_HZ 2000000  // 1MHz resolution
 #define TAG_RMT "RMT"
 
-const static uint32_t uniform_speed_hz = 20000;
+const static uint32_t uniform_speed_hz = 30000;
 
 #define MAX_COMMANDS 10
 #define MOVE_HEADER_LENGTH 32
@@ -239,11 +239,11 @@ void toggleMotor(bool switchOn, int motor) {
 void executeToggleMagnet(uint8_t switchOn) {
     if (switchOn == '1') {
         gpio_set_level(EM_TOGGLE, 1);
-        vTaskDelay(100 / portTICK_PERIOD_MS);
+        vTaskDelay(200 / portTICK_PERIOD_MS);
         printf("Magnet state: %d", switchOn);
     } else if (switchOn == '0') {
         gpio_set_level(EM_TOGGLE, 0);
-        vTaskDelay(100 / portTICK_PERIOD_MS);
+        vTaskDelay(200 / portTICK_PERIOD_MS);
         printf("Magnet state: %d", switchOn);
     } else {
         printf("wrong command in magnet toggle");
