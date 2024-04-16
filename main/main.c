@@ -73,7 +73,7 @@
 #define STEP_MOTOR_RESOLUTION_HZ 2000000  // 1MHz resolution
 #define TAG_RMT "RMT"
 
-const static uint32_t uniform_speed_hz = 30000;
+const static uint32_t uniform_speed_hz = 25000;
 
 #define MAX_COMMANDS 10
 #define MOVE_HEADER_LENGTH 32
