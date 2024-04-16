@@ -302,8 +302,10 @@ int executeMove(Direction dir, double numHalfTiles) {
 
     gpio_set_level(STEP_MOTOR_DIR1, dirConfigs[dir][0]);
     gpio_set_level(STEP_MOTOR_DIR2, dirConfigs[dir][1]);
-    toggleMotor(dirConfigs[dir][2], 1);
-    toggleMotor(dirConfigs[dir][3], 2);
+    enableMotor1();
+    enableMotor2();
+    // toggleMotor(dirConfigs[dir][2], 1);
+    // toggleMotor(dirConfigs[dir][3], 2);
     printf("dirConfigs %i : DIR1 = %i, DIR2 = %i, M1  = %i, M2  = %i \n", dir, dirConfigs[dir][0],
            dirConfigs[dir][1], dirConfigs[dir][2], dirConfigs[dir][3]);
 
